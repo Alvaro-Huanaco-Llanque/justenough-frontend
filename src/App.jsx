@@ -2,16 +2,15 @@ import { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  // Estados separados para Registro
   const [regNombre, setRegNombre] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
-  // Estados separados para Login
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  const [token, setToken] = useState('');
+  // Inicializamos el token leyéndolo del localStorage si ya existe
+  const [token, setToken] = useState(() => localStorage.getItem('jwt_token') || '');
   const [usuarios, setUsuarios] = useState([]);
   const [mensaje, setMensaje] = useState('');
 
@@ -59,13 +58,51 @@ function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setToken(data.token);
-        setMensaje('¡Login exitoso! Token obtenido.');
+        const jwtToken = data.token;
+        setToken(jwtToken);
+        // ¡Guardamos el token en el localStorage!
+        localStorage.setItem('jwt_token', jwtToken);
+        setMensaje('¡Login exitoso! Token guardado en localStorage.');
       } else {
         setMensaje('Error en login: ' + (data.message || JSON.stringify(data)));
       }
     } catch (err) {
       setMensaje('Error de conexión con el backend');
+    }
+  };
+
+  // Función para cerrar sesión y limpiar el almacenamiento
+  const handleLogout = () => {
+    setToken('');
+    localStorage.removeItem('jwt_token');
+    setMensaje('Sesión cerrada correctamente.');
+  };
+
+  const [perfilMensaje, setPerfilMensaje] = useState('');
+
+  const probarRutaProtegida = async () => {
+    try {
+      const jwtGuardado = localStorage.getItem('jwt_token');
+      if (!jwtGuardado) {
+        setPerfilMensaje('No hay token guardado. Iniciá sesión primero.');
+        return;
+      }
+
+      const res = await fetch('http://localhost:8080/api/usuarios/perfil', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${jwtGuardado}`
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.text(); // O .json() dependiendo de qué devuelva tu backend
+        setPerfilMensaje('Éxito en ruta protegida: ' + data);
+      } else {
+        setPerfilMensaje('Acceso denegado (401/403). Token inválido o expirado.');
+      }
+    } catch (err) {
+      setPerfilMensaje('Error de conexión con el backend');
     }
   };
 
@@ -109,12 +146,21 @@ function App() {
         </form>
       </div>
 
-      {token && (
+{token && (
         <div style={{ marginTop: '20px', background: '#e6ffe6', padding: '10px', wordBreak: 'break-all', color: '#000' }}>
-          <strong>Token JWT Actual:</strong> {token}
+          <strong>Token JWT Guardado:</strong> {token}
+          <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
+            <button onClick={probarRutaProtegida} style={{ background: '#007bff', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer' }}>
+              Probar Ruta Protegida
+            </button>
+            <button onClick={handleLogout} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '5px 10px', cursor: 'pointer' }}>
+              Cerrar Sesión
+            </button>
+          </div>
+          {perfilMensaje && <div style={{ marginTop: '10px', fontWeight: 'bold' }}>{perfilMensaje}</div>}
         </div>
       )}
-
+      
       <div style={{ marginTop: '30px' }}>
         <h3>Usuarios en la Base de Datos ({usuarios.length})</h3>
         <ul>
