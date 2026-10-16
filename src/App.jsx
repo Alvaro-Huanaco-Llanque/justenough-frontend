@@ -1,22 +1,17 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
-
-// Componente temporal para el Dashboard (luego lo haremos en su propio archivo)
-function DashboardPlaceholder() {
-  return (
-    <div style={{ padding: '50px', textAlign: 'center' }}>
-      <h1>¡Login Exitoso! 🎉</h1>
-      <p>Acá irá el panel principal (Dashboard) que diseñaron en Figma.</p>
-    </div>
-  );
-}
+import Registro from './pages/Registro';
+import RecuperarPassword from './pages/RecuperarPassword';
+import Dashboard from './pages/Dashboard';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<DashboardPlaceholder />} />
+        <Route path="/registro" element={<Registro />} />
+        <Route path="/recuperar" element={<RecuperarPassword />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   );

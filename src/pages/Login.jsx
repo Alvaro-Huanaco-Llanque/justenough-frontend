@@ -21,7 +21,6 @@ function Login() {
       const data = await res.json();
       
       if (res.ok) {
-        // Guardamos el token y redirigimos al panel principal
         localStorage.setItem('jwt_token', data.token);
         navigate('/dashboard'); 
       } else {
@@ -32,28 +31,46 @@ function Login() {
     }
   };
 
+  const inputStyle = {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: '1px solid #dcd6cd',
+    backgroundColor: '#FFFFFF',
+    color: '#333333',
+    fontSize: '1rem',
+    outline: 'none',
+    boxSizing: 'border-box'
+  };
+
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
       
-      {/* Lado Izquierdo - Branding */}
+      {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
       <div style={{ 
         flex: 1, 
-        backgroundColor: '#FDFBF7', 
-        padding: '50px', 
+        backgroundColor: '#F7F4EB', 
+        padding: '60px', 
         display: 'flex', 
         flexDirection: 'column', 
         justifyContent: 'center' 
       }}>
-        <h2 style={{ color: '#D4AF37', marginBottom: '20px' }}>(o) Just Enough</h2>
-        <h1 style={{ fontSize: '3rem', color: '#333', lineHeight: '1.2' }}>
-          Producí lo justo.<br/>Desperdiciá menos.
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
+          <span style={{ color: '#D4AF37', fontSize: '1.5rem', fontWeight: 'bold' }}>(o)</span>
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
+        </div>
+        <h1 style={{ fontSize: '3.2rem', color: '#1a1a1a', lineHeight: '1.15', margin: '0 0 15px 0' }}>
+          Producí lo justo.
         </h1>
-        <p style={{ color: '#666', fontSize: '1.2rem', marginTop: '20px' }}>
-          Predicciones simples para una producción gastronómica más inteligente.
+        <h1 style={{ fontSize: '3.2rem', color: '#B89732', lineHeight: '1.15', margin: '0 0 25px 0' }}>
+          Desperdiciá menos.
+        </h1>
+        <p style={{ color: '#666666', fontSize: '1.1rem', lineHeight: '1.5', maxWidth: '420px' }}>
+          Predicciones simples para una producción gastronómica más eficiente.
         </p>
       </div>
 
-      {/* Lado Derecho - Formulario */}
+      {/* Lado Derecho - Formulario de Login */}
       <div style={{ 
         flex: 1, 
         backgroundColor: '#FFFFFF', 
@@ -62,49 +79,53 @@ function Login() {
         justifyContent: 'center', 
         alignItems: 'center' 
       }}>
-        <div style={{ width: '100%', maxWidth: '400px' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '30px', color: '#333' }}>Bienvenida de nuevo</h2>
+        <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0' }}>
+          <h2 style={{ fontSize: '2rem', marginBottom: '30px', color: '#1a1a1a', marginTop: '0' }}>Bienvenida de nuevo</h2>
           
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#555' }}>Email</label>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Email</label>
               <input 
                 type="email" 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 required 
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }}
+                style={inputStyle}
                 placeholder="camila@laespiga.com"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '8px', color: '#555' }}>Contraseña</label>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Contraseña</label>
               <input 
                 type="password" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 required 
-                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }}
+                style={inputStyle}
                 placeholder="Ingresa tu contraseña"
               />
               <div style={{ textAlign: 'right', marginTop: '8px' }}>
-                <span style={{ color: '#D4AF37', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                <span 
+                  onClick={() => navigate('/recuperar')} 
+                  style={{ color: '#B89732', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold' }}
+                >
                   ¿Olvidaste tu contraseña?
                 </span>
               </div>
             </div>
 
-            {error && <p style={{ color: 'red', margin: '0' }}>{error}</p>}
+            {error && <p style={{ color: 'red', margin: '0', fontSize: '0.9rem' }}>{error}</p>}
 
             <button 
               type="submit" 
               style={{ 
-                padding: '15px', 
-                backgroundColor: '#F5D77F', 
+                padding: '14px', 
+                backgroundColor: '#F4D06F', 
+                color: '#1a1a1a',
                 border: 'none', 
                 borderRadius: '8px', 
-                fontSize: '1.1rem', 
+                fontSize: '1rem', 
                 fontWeight: 'bold', 
                 cursor: 'pointer',
                 marginTop: '10px'
@@ -114,8 +135,8 @@ function Login() {
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', marginTop: '20px', color: '#666' }}>
-            ¿No tenés cuenta? <span style={{ color: '#D4AF37', cursor: 'pointer', fontWeight: 'bold' }}>Crear cuenta</span>
+          <p style={{ textAlign: 'center', marginTop: '25px', color: '#666666' }}>
+            ¿No tenés cuenta? <span onClick={() => navigate('/registro')} style={{ color: '#B89732', cursor: 'pointer', fontWeight: 'bold' }}>Crear cuenta</span>
           </p>
         </div>
       </div>
