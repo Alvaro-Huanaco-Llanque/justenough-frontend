@@ -38,23 +38,29 @@ function Registro() {
     }
     setError('');
 
+    // Ajustamos las keys para que coincidan con el DTO de Spring Boot
+    const datosRegistroCompleto = {
+      nombre: nombreUsuario, // <- Spring Boot espera 'nombre' para el usuario
+      email: email,
+      password: password,
+      nombreComercio: nombreComercio,
+      rubro: rubro,
+      direccion: direccion,
+      telefono: telefono
+    };
+
     try {
       const res = await fetch('http://localhost:8080/api/usuarios/registro', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          nombre: nombreUsuario, 
-          email: email, 
-          password: password 
-        })
+        body: JSON.stringify(datosRegistroCompleto)
       });
 
       if (res.ok) {
-        // En lugar de redirigir de una, activamos la pantalla de verificación de email
         setVerificandoEmail(true);
       } else {
         const errText = await res.text();
-        setError('Error al registrarse: ' + errText);
+        setError('Error al registrarse en la base de datos: ' + errText);
       }
     } catch (err) {
       setError('Error de conexión con el servidor');
