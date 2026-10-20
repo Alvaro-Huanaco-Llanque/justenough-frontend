@@ -94,14 +94,14 @@ function Dashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {[
                 { id: 'principal', label: 'Principal', icon: '🏠', ruta: '/dashboard' },
-                { id: 'producido', label: 'Producido / Compras', icon: '📦', ruta: '/producido' },
-                { id: 'ventas', label: 'Ventas', icon: '📈', ruta: '#' },
-                { id: 'desechos', label: 'Desechos', icon: '🗑️', ruta: '#' },
-                { id: 'sugerencias', label: 'Sugerencias', icon: '✨', badge: 3, ruta: '#' },
-                { id: 'impacto', label: 'Impacto', icon: '📊', ruta: '#' },
-                { id: 'productos', label: 'Productos', icon: '⭐', ruta: '#' },
-                { id: 'calendario', label: 'Calendario', icon: '📅', ruta: '#' },
-                { id: 'madurez', label: 'Madurez', icon: '🌱', ruta: '#' },
+    { id: 'producido', label: 'Producido / Compras', icon: '📦', ruta: '/producido' },
+    { id: 'ventas', label: 'Ventas', icon: '📈', ruta: '/ventas' },
+    { id: 'desechos', label: 'Desechos', icon: '🗑️', ruta: '/desechos' },
+    { id: 'sugerencias', label: 'Sugerencias', icon: '✨', badge: 3, ruta: '/sugerencias' },
+    { id: 'impacto', label: 'Impacto', icon: '📊', ruta: '/impacto' },
+    { id: 'productos', label: 'Productos', icon: '⭐', ruta: '/productos' },
+    { id: 'calendario', label: 'Calendario', icon: '📅', ruta: '/calendario' },
+    { id: 'madurez', label: 'Madurez', icon: '🌱', ruta: '/madurez' },
               ].map((item) => (
                 <div 
                   key={item.id}
