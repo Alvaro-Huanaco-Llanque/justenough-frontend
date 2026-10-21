@@ -5,11 +5,9 @@ function Productos() {
   const navigate = useNavigate();
   const seccionActiva = 'productos';
 
-  // ================= ESTADOS GLOBALES =================
-  const [pestanaActiva, setPestanaActiva] = useState('productos'); // 'productos' o 'insumos'
+  const [pestanaActiva, setPestanaActiva] = useState('productos'); 
   const [paginaActual, setPaginaActual] = useState(1);
   
-  // ================= ESTADOS PRODUCTOS =================
   const [productos, setProductos] = useState([]);
   const [modalEliminar, setModalEliminar] = useState(false);
   const [productoAEliminar, setProductoAEliminar] = useState('');
@@ -20,16 +18,16 @@ function Productos() {
     insumos: [{ id: Date.now(), ingrediente: '', cantidad: '' }]
   });
 
-  // ================= ESTADOS INSUMOS =================
   const [insumos, setInsumos] = useState([]);
   const [modalEliminarInsumo, setModalEliminarInsumo] = useState(false);
   const [insumoAEliminar, setInsumoAEliminar] = useState('');
   const [panelInsumoAbierto, setPanelInsumoAbierto] = useState(false);
+  
+  // Modificado: Se quita vidaUtil y se agrega fechaCompra
   const [nuevoInsumo, setNuevoInsumo] = useState({
-    nombre: '', unidadMedida: 'KG', stockActual: '', vidaUtilNum: '', vidaUtilTipo: 'dias'
+    nombre: '', unidadMedida: 'KG', stockActual: '', fechaCompra: ''
   });
 
-  // ================= CARGA DE DATOS =================
   useEffect(() => {
     cargarProductos();
     cargarInsumos();
@@ -73,7 +71,7 @@ function Productos() {
           nombre: i.nombre,
           unidad: i.unidadMedida ? i.unidadMedida.toLowerCase() : 'kg',
           stock: i.stockActual || 0,
-          vidaUtil: i.vidaUtilDias === 1 ? "24 h" : `${i.vidaUtilDias} días`,
+          fechaCompra: i.fechaCompra || '-', // Mostrar fecha de compra mapeada
           estado: (i.stockActual || 0) <= 5 ? "Crítico" : "Óptimo"
         }));
         setInsumos(insumosMapeados);
@@ -83,7 +81,6 @@ function Productos() {
     }
   };
 
-  // ================= LÓGICA DE PRODUCTOS =================
   const eliminarProducto = async () => {
     if (!productoAEliminar) return;
     try {
@@ -100,15 +97,28 @@ function Productos() {
   };
 
   const guardarProducto = async () => {
-    if (!nuevoProducto.nombre || !nuevoProducto.vidaUtilNum) { alert("Nombre y vida útil requeridos"); return; }
+    if (!nuevoProducto.nombre || !nuevoProducto.vidaUtilNum) { 
+      alert("Nombre y vida útil requeridos"); 
+      return; 
+    }
     let diasCalculados = parseInt(nuevoProducto.vidaUtilNum, 10);
     if (nuevoProducto.vidaUtilTipo === 'horas') diasCalculados = Math.max(1, Math.ceil(diasCalculados / 24));
     else if (nuevoProducto.vidaUtilTipo === 'meses') diasCalculados = diasCalculados * 30;
     else if (nuevoProducto.vidaUtilTipo === 'año') diasCalculados = diasCalculados * 365;
     
+    const insumosRecetaMapeados = nuevoProducto.requiereReceta ? nuevoProducto.insumos.map(i => ({
+      ingrediente: i.ingrediente,
+      cantidad: parseFloat(i.cantidad) || 0
+    })) : [];
+
     const productoParaBackend = {
-      nombre: nuevoProducto.nombre, unidadMedida: nuevoProducto.unidadMedida, vidaUtilDias: diasCalculados,
-      stock: parseFloat(nuevoProducto.stock) || 0, priorizado: nuevoProducto.priorizado, activo: true
+      nombre: nuevoProducto.nombre, 
+      unidadMedida: nuevoProducto.unidadMedida, 
+      vidaUtilDias: diasCalculados,
+      stock: parseFloat(nuevoProducto.stock) || 0, 
+      priorizado: nuevoProducto.priorizado, 
+      activo: true,
+      insumos: insumosRecetaMapeados 
     };
 
     try {
@@ -118,14 +128,23 @@ function Productos() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(productoParaBackend)
       });
-      if (res.ok) cargarProductos();
-    } catch (error) { console.error("Error guardando producto"); }
 
-    setPanelAbierto(false);
-    setNuevoProducto({ nombre: '', unidadMedida: 'UNIDAD', vidaUtilNum: '', vidaUtilTipo: 'horas', stock: '', priorizado: false, requiereReceta: true, insumos: [{ id: Date.now(), ingrediente: '', cantidad: '' }] });
+      if (res.ok) {
+        cargarProductos();
+        cargarInsumos(); 
+        setPanelAbierto(false);
+        setNuevoProducto({ nombre: '', unidadMedida: 'UNIDAD', vidaUtilNum: '', vidaUtilTipo: 'horas', stock: '', priorizado: false, requiereReceta: true, insumos: [{ id: Date.now(), ingrediente: '', cantidad: '' }] });
+        alert("¡Producto guardado y stock de insumos descontado con éxito!");
+      } else {
+        const errorData = await res.json();
+        alert(errorData.message || "No se pudo guardar el producto.");
+      }
+    } catch (error) { 
+      console.error("Error de conexión al guardar producto", error); 
+      alert("Error de conexión con el servidor.");
+    }
   };
 
-  // ================= LÓGICA DE INSUMOS =================
   const eliminarInsumo = async () => {
     if (!insumoAEliminar) return;
     try {
@@ -140,18 +159,13 @@ function Productos() {
   };
 
   const guardarInsumo = async () => {
-    if (!nuevoInsumo.nombre || !nuevoInsumo.vidaUtilNum) { alert("Nombre y vida útil requeridos"); return; }
-    let diasCalculados = parseInt(nuevoInsumo.vidaUtilNum, 10);
-    if (nuevoInsumo.vidaUtilTipo === 'horas') diasCalculados = Math.max(1, Math.ceil(diasCalculados / 24));
-    else if (nuevoInsumo.vidaUtilTipo === 'meses') diasCalculados = diasCalculados * 30;
-    else if (nuevoInsumo.vidaUtilTipo === 'año') diasCalculados = diasCalculados * 365;
+    if (!nuevoInsumo.nombre || !nuevoInsumo.fechaCompra) { alert("Nombre y fecha de compra requeridos"); return; }
     
     const insumoParaBackend = {
       nombre: nuevoInsumo.nombre, 
       unidadMedida: nuevoInsumo.unidadMedida, 
-      vidaUtilDias: diasCalculados,
-      stockActual: parseFloat(nuevoInsumo.stockActual) || 0,
-      costoUnitario: 0
+      fechaCompra: nuevoInsumo.fechaCompra, // Enviamos formato YYYY-MM-DD
+      stockActual: parseFloat(nuevoInsumo.stockActual) || 0
     };
 
     try {
@@ -165,7 +179,19 @@ function Productos() {
     } catch (error) { console.error("Error guardando insumo"); }
 
     setPanelInsumoAbierto(false);
-    setNuevoInsumo({ nombre: '', unidadMedida: 'KG', stockActual: '', vidaUtilNum: '', vidaUtilTipo: 'dias' });
+    setNuevoInsumo({ nombre: '', unidadMedida: 'KG', stockActual: '', fechaCompra: '' });
+  };
+
+  const actualizarInsumoReceta = (id, campo, valor) => {
+    const nuevosInsumos = nuevoProducto.insumos.map(ins => ins.id === id ? { ...ins, [campo]: valor } : ins);
+    setNuevoProducto({ ...nuevoProducto, insumos: nuevosInsumos });
+  };
+  const agregarInsumoReceta = () => {
+    setNuevoProducto({ ...nuevoProducto, insumos: [...nuevoProducto.insumos, { id: Date.now(), ingrediente: '', cantidad: '' }] });
+  };
+  const eliminarInsumoReceta = (id) => {
+    const nuevosInsumos = nuevoProducto.insumos.filter(ins => ins.id !== id);
+    setNuevoProducto({ ...nuevoProducto, insumos: nuevosInsumos });
   };
 
   const datosPaginados = pestanaActiva === 'productos' 
@@ -196,23 +222,15 @@ function Productos() {
   const bgApp = '#FAF9F6'; const bgCard = '#FFFFFF'; const borderLight = '#EAE6DF';
   const textDark = '#1A1A1A'; const textGray = '#666666'; const goldPrimary = '#D4AF37'; const goldLight = '#F9EBBF';
 
-  // Estilo estricto para inputs y selects (fondo blanco, texto oscuro)
   const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    border: `1px solid ${borderLight}`,
-    backgroundColor: '#FFFFFF',
-    color: '#1A1A1A',
-    fontSize: '0.95rem',
-    boxSizing: 'border-box',
-    outline: 'none'
+    width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${borderLight}`,
+    backgroundColor: '#FFFFFF', color: '#1A1A1A', fontSize: '0.95rem', boxSizing: 'border-box', outline: 'none'
   };
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: '"Inter", "Segoe UI", Arial, sans-serif', backgroundColor: bgApp, boxSizing: 'border-box', overflow: 'hidden', position: 'relative' }}>
       
-      {/* ================= BARRA LATERAL ================= */}
+      {/* BARRA LATERAL */}
       <div style={{ width: '260px', height: '100%', backgroundColor: bgApp, borderRight: `1px solid ${borderLight}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '25px 20px', boxSizing: 'border-box', flexShrink: 0, overflowY: 'auto' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
@@ -222,7 +240,6 @@ function Productos() {
               <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold', letterSpacing: '0.5px' }}>PLAN BÁSICO</span>
             </div>
           </div>
-
           <div style={{ marginBottom: '20px' }}>
             <span style={{ fontSize: '0.7rem', color: '#A0A0A0', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '10px', paddingLeft: '10px' }}>ESPACIO DE TRABAJO</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -239,7 +256,7 @@ function Productos() {
         </div>
       </div>
 
-      {/* ================= CONTENIDO PRINCIPAL ================= */}
+      {/* CONTENIDO PRINCIPAL */}
       <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '40px 50px', boxSizing: 'border-box' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
@@ -249,40 +266,18 @@ function Productos() {
           </div>
         </div>
 
-        {/* SELECTOR DE PESTAÑAS */}
         <div style={{ display: 'flex', gap: '30px', borderBottom: `2px solid ${borderLight}`, marginBottom: '25px' }}>
-          <div 
-            onClick={() => { setPestanaActiva('productos'); setPaginaActual(1); }}
-            style={{ padding: '10px 5px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: pestanaActiva === 'productos' ? 'bold' : '500', color: pestanaActiva === 'productos' ? textDark : textGray, borderBottom: pestanaActiva === 'productos' ? `3px solid ${goldPrimary}` : '3px solid transparent', transform: 'translateY(2px)' }}
-          >
-            Productos
-          </div>
-          <div 
-            onClick={() => { setPestanaActiva('insumos'); setPaginaActual(1); }}
-            style={{ padding: '10px 5px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: pestanaActiva === 'insumos' ? 'bold' : '500', color: pestanaActiva === 'insumos' ? textDark : textGray, borderBottom: pestanaActiva === 'insumos' ? `3px solid ${goldPrimary}` : '3px solid transparent', transform: 'translateY(2px)' }}
-          >
-            Insumos
-          </div>
+          <div onClick={() => { setPestanaActiva('productos'); setPaginaActual(1); }} style={{ padding: '10px 5px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: pestanaActiva === 'productos' ? 'bold' : '500', color: pestanaActiva === 'productos' ? textDark : textGray, borderBottom: pestanaActiva === 'productos' ? `3px solid ${goldPrimary}` : '3px solid transparent', transform: 'translateY(2px)' }}>Productos</div>
+          <div onClick={() => { setPestanaActiva('insumos'); setPaginaActual(1); }} style={{ padding: '10px 5px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: pestanaActiva === 'insumos' ? 'bold' : '500', color: pestanaActiva === 'insumos' ? textDark : textGray, borderBottom: pestanaActiva === 'insumos' ? `3px solid ${goldPrimary}` : '3px solid transparent', transform: 'translateY(2px)' }}>Insumos</div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button 
-              onClick={() => pestanaActiva === 'productos' ? setModalEliminar(true) : setModalEliminarInsumo(true)}
-              style={{ padding: '10px 20px', backgroundColor: '#FCE8E6', color: '#C5221F', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <span>🗑️</span> Eliminar {pestanaActiva === 'productos' ? 'producto' : 'insumo'}
-            </button>
-            <button 
-              onClick={() => pestanaActiva === 'productos' ? setPanelAbierto(true) : setPanelInsumoAbierto(true)}
-              style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <span>+</span> Nuevo {pestanaActiva === 'productos' ? 'producto' : 'insumo'}
-            </button>
+            <button onClick={() => pestanaActiva === 'productos' ? setModalEliminar(true) : setModalEliminarInsumo(true)} style={{ padding: '10px 20px', backgroundColor: '#FCE8E6', color: '#C5221F', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}><span>🗑️</span> Eliminar {pestanaActiva === 'productos' ? 'producto' : 'insumo'}</button>
+            <button onClick={() => pestanaActiva === 'productos' ? setPanelAbierto(true) : setPanelInsumoAbierto(true)} style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}><span>+</span> Nuevo {pestanaActiva === 'productos' ? 'producto' : 'insumo'}</button>
           </div>
         </div>
 
-        {/* TABLA DINÁMICA */}
         <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, padding: '0', marginBottom: '30px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
             <thead>
@@ -290,7 +285,7 @@ function Productos() {
                 <th style={{ padding: '20px 30px', fontWeight: 'bold', textAlign: 'left' }}>{pestanaActiva === 'productos' ? 'PRODUCTO' : 'INSUMO'}</th>
                 <th style={{ padding: '20px', fontWeight: 'bold' }}>{pestanaActiva === 'productos' ? 'STOCK' : 'STOCK ACTUAL'}</th>
                 <th style={{ padding: '20px', fontWeight: 'bold' }}>UNIDAD</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>VIDA ÚTIL</th>
+                <th style={{ padding: '20px', fontWeight: 'bold' }}>{pestanaActiva === 'productos' ? 'VIDA ÚTIL' : 'FECHA DE COMPRA'}</th>
                 {pestanaActiva === 'productos' && <th style={{ padding: '20px', fontWeight: 'bold' }}>MÍNIMO</th>}
                 {pestanaActiva === 'productos' && <th style={{ padding: '20px', fontWeight: 'bold' }}>PRIORIZADO</th>}
                 <th style={{ padding: '20px 30px', fontWeight: 'bold', textAlign: 'right' }}>ESTADO</th>
@@ -304,63 +299,19 @@ function Productos() {
                     <td style={{ padding: '20px 30px', fontWeight: '600', color: textDark, fontSize: '0.95rem', textAlign: 'left' }}>{item.nombre}</td>
                     <td style={{ padding: '20px', fontWeight: 'bold', color: textDark, fontSize: '1rem' }}>{item.stock}</td>
                     <td style={{ padding: '20px', color: textGray, fontSize: '0.95rem' }}>{item.unidad}</td>
-                    <td style={{ padding: '20px', color: textGray, fontSize: '0.95rem' }}>{item.vidaUtil}</td>
+                    <td style={{ padding: '20px', color: textGray, fontSize: '0.95rem' }}>{pestanaActiva === 'productos' ? item.vidaUtil : item.fechaCompra}</td>
                     {pestanaActiva === 'productos' && <td style={{ padding: '20px', color: textGray, fontSize: '0.95rem' }}>{item.minimo}</td>}
                     {pestanaActiva === 'productos' && <td style={{ padding: '20px', fontSize: '1.2rem', color: item.priorizado ? '#D4AF37' : '#D1CFC8' }}>{item.priorizado ? '★' : '☆'}</td>}
-                    <td style={{ padding: '20px 30px', textAlign: 'right' }}>
-                      <span style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', backgroundColor: badge.bg, color: badge.color }}>{item.estado}</span>
-                    </td>
+                    <td style={{ padding: '20px 30px', textAlign: 'right' }}><span style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', backgroundColor: badge.bg, color: badge.color }}>{item.estado}</span></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 30px', borderTop: `1px solid ${borderLight}` }}>
-            <span style={{ color: '#888', fontSize: '0.85rem' }}>Página {paginaActual} de {totalPaginasCalculadas}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <button onClick={() => setPaginaActual(prev => Math.max(prev - 1, 1))} disabled={paginaActual === 1} style={{ width: '32px', height: '32px', borderRadius: '8px', border: `1px solid ${borderLight}`, backgroundColor: paginaActual === 1 ? '#F5F5F5' : bgCard, cursor: paginaActual === 1 ? 'not-allowed' : 'pointer', color: textGray }}>&lt;</button>
-              <button onClick={() => setPaginaActual(prev => Math.min(prev + 1, totalPaginasCalculadas))} disabled={paginaActual === totalPaginasCalculadas} style={{ width: '32px', height: '32px', borderRadius: '8px', border: `1px solid ${borderLight}`, backgroundColor: paginaActual === totalPaginasCalculadas ? '#F5F5F5' : bgCard, cursor: paginaActual === totalPaginasCalculadas ? 'not-allowed' : 'pointer', color: textDark }}>&gt;</button>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* ================= MODAL ELIMINAR PRODUCTO ================= */}
-      {modalEliminar && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div style={{ backgroundColor: bgCard, width: '400px', borderRadius: '16px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ fontSize: '1.4rem', marginBottom: '15px', color: textDark }}>Eliminar producto</h3>
-            <select value={productoAEliminar} onChange={(e) => setProductoAEliminar(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}>
-              <option value="">Seleccionar...</option>
-              {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button onClick={() => setModalEliminar(false)} style={{ padding: '10px 20px', backgroundColor: bgCard, border: `1px solid ${borderLight}`, borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={eliminarProducto} style={{ padding: '10px 20px', backgroundColor: '#FCE8E6', color: '#C5221F', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL ELIMINAR INSUMO ================= */}
-      {modalEliminarInsumo && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div style={{ backgroundColor: bgCard, width: '400px', borderRadius: '16px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ fontSize: '1.4rem', marginBottom: '15px', color: textDark }}>Eliminar insumo</h3>
-            <select value={insumoAEliminar} onChange={(e) => setInsumoAEliminar(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}>
-              <option value="">Seleccionar...</option>
-              {insumos.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
-            </select>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button onClick={() => setModalEliminarInsumo(false)} style={{ padding: '10px 20px', backgroundColor: bgCard, border: `1px solid ${borderLight}`, borderRadius: '8px', cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={eliminarInsumo} style={{ padding: '10px 20px', backgroundColor: '#FCE8E6', color: '#C5221F', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= PANEL NUEVO PRODUCTO ================= */}
+      {/* PANEL NUEVO PRODUCTO */}
       {panelAbierto && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 2000 }}>
           <div style={{ position: 'absolute', top: 0, right: 0, width: '450px', height: '100%', backgroundColor: bgApp, padding: '30px', overflowY: 'auto', boxSizing: 'border-box' }}>
@@ -392,20 +343,44 @@ function Productos() {
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input type="number" placeholder="Ej. 24" value={nuevoProducto.vidaUtilNum} onChange={e => setNuevoProducto({...nuevoProducto, vidaUtilNum: e.target.value})} style={{ ...inputStyle, flex: 1 }} />
                 <select value={nuevoProducto.vidaUtilTipo} onChange={e => setNuevoProducto({...nuevoProducto, vidaUtilTipo: e.target.value})} style={{ ...inputStyle, width: '110px' }}>
-                  <option value="horas">horas</option>
-                  <option value="dias">días</option>
-                  <option value="meses">meses</option>
-                  <option value="año">año</option>
+                  <option value="horas">horas</option><option value="dias">días</option><option value="meses">meses</option><option value="año">año</option>
                 </select>
               </div>
             </div>
+
+            {/* SECCIÓN DE RECETA */}
+            <hr style={{ border: 'none', borderTop: `1px solid ${borderLight}`, margin: '25px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+              <input type="checkbox" checked={nuevoProducto.requiereReceta} onChange={(e) => setNuevoProducto({...nuevoProducto, requiereReceta: e.target.checked})} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: goldPrimary }} />
+              <label style={{ fontSize: '0.95rem', fontWeight: 'bold', color: textDark }}>Requiere preparación</label>
+            </div>
+
+            {nuevoProducto.requiereReceta && (
+              <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#F9F9F9', borderRadius: '8px', border: `1px solid ${borderLight}` }}>
+                <label style={{ fontSize: '0.85rem', color: textGray, display: 'block', marginBottom: '15px' }}>Insumos necesarios por unidad/kg:</label>
+                
+                {nuevoProducto.insumos.map((ins) => (
+                  <div key={ins.id} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                    <select value={ins.ingrediente} onChange={(e) => actualizarInsumoReceta(ins.id, 'ingrediente', e.target.value)} style={{ ...inputStyle, flex: 2 }}>
+                      <option value="">Seleccionar insumo...</option>
+                      {insumos.map(i => <option key={i.id} value={i.nombre}>{i.nombre}</option>)}
+                    </select>
+                    <input type="number" placeholder="Cant." value={ins.cantidad} onChange={(e) => actualizarInsumoReceta(ins.id, 'cantidad', e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+                    {nuevoProducto.insumos.length > 1 && (
+                      <button onClick={() => eliminarInsumoReceta(ins.id)} style={{ background: 'none', border: 'none', color: '#C5221F', cursor: 'pointer', fontSize: '1.2rem', padding: '0 5px' }}>×</button>
+                    )}
+                  </div>
+                ))}
+                <span onClick={agregarInsumoReceta} style={{ color: '#D4AF37', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block', marginTop: '10px' }}>+ Agregar otro insumo</span>
+              </div>
+            )}
 
             <button onClick={guardarProducto} style={{ width: '100%', padding: '15px', backgroundColor: '#F4D06F', color: '#665324', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '20px' }}>Guardar producto</button>
           </div>
         </div>
       )}
 
-      {/* ================= PANEL NUEVO INSUMO ================= */}
+      {/* PANEL NUEVO INSUMO */}
       {panelInsumoAbierto && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 2000 }}>
           <div style={{ position: 'absolute', top: 0, right: 0, width: '450px', height: '100%', backgroundColor: bgApp, padding: '30px', overflowY: 'auto', boxSizing: 'border-box' }}>
@@ -433,16 +408,8 @@ function Productos() {
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px', color: textDark }}>Vida útil</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input type="number" placeholder="Ej. 6" value={nuevoInsumo.vidaUtilNum} onChange={e => setNuevoInsumo({...nuevoInsumo, vidaUtilNum: e.target.value})} style={{ ...inputStyle, flex: 1 }} />
-                <select value={nuevoInsumo.vidaUtilTipo} onChange={e => setNuevoInsumo({...nuevoInsumo, vidaUtilTipo: e.target.value})} style={{ ...inputStyle, width: '110px' }}>
-                  <option value="horas">horas</option>
-                  <option value="dias">días</option>
-                  <option value="meses">meses</option>
-                  <option value="año">año</option>
-                </select>
-              </div>
+              <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px', color: textDark }}>Fecha de compra</label>
+              <input type="date" value={nuevoInsumo.fechaCompra} onChange={e => setNuevoInsumo({...nuevoInsumo, fechaCompra: e.target.value})} style={inputStyle} />
             </div>
 
             <button onClick={guardarInsumo} style={{ width: '100%', padding: '15px', backgroundColor: '#F4D06F', color: '#665324', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '20px' }}>Guardar insumo</button>
