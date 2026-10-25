@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch, leerMensajeError } from '../api';
+
+const PROVINCIAS = [
+  'Ciudad Autónoma de Buenos Aires', 'Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
+  'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
+  'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
+];
 
 function Registro() {
   const [paso, setPaso] = useState(1);
+  const [cargando, setCargando] = useState(false);
   const [verificandoEmail, setVerificandoEmail] = useState(false);
+  const [avisoReenvio, setAvisoReenvio] = useState('');
   
   // Estados del Paso 1 (Comercio)
   const [nombreComercio, setNombreComercio] = useState('');
   const [rubro, setRubro] = useState('PANADERIA');
   const [direccion, setDireccion] = useState('');
+  const [localidad, setLocalidad] = useState('');
+  const [provincia, setProvincia] = useState(PROVINCIAS[0]);
   const [telefono, setTelefono] = useState('');
 
   // Estados del Paso 2 (Usuario/Dueño)
@@ -22,7 +33,7 @@ function Registro() {
 
   const handleSiguiente = (e) => {
     e.preventDefault();
-    if (!nombreComercio || !direccion || !telefono) {
+    if (!nombreComercio || !direccion || !localidad || !provincia || !telefono) {
       setError('Por favor completa todos los campos del comercio.');
       return;
     }
@@ -32,38 +43,58 @@ function Registro() {
 
   const handleRegistroFinal = async (e) => {
     e.preventDefault();
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
     if (!terminos) {
       setError('Debes aceptar los términos y condiciones.');
       return;
     }
     setError('');
+    setCargando(true);
 
-    // Ajustamos las keys para que coincidan con el DTO de Spring Boot
+    // Las keys coinciden con UsuarioRegistroRequestDto de Spring Boot
     const datosRegistroCompleto = {
-      nombre: nombreUsuario, // <- Spring Boot espera 'nombre' para el usuario
-      email: email,
-      password: password,
-      nombreComercio: nombreComercio,
-      rubro: rubro,
-      direccion: direccion,
-      telefono: telefono
+      nombre: nombreUsuario,
+      email,
+      password,
+      nombreComercio,
+      rubro,
+      direccion,
+      localidad,
+      provincia,
+      telefono
     };
 
     try {
-      const res = await fetch('http://localhost:8080/api/usuarios/registro', {
+      const res = await apiFetch('/api/usuarios/registro', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datosRegistroCompleto)
       });
 
       if (res.ok) {
+        // La cuenta queda creada pero sin verificar: mostramos la pantalla "Verificá tu email"
         setVerificandoEmail(true);
       } else {
-        const errText = await res.text();
-        setError('Error al registrarse en la base de datos: ' + errText);
+        setError(await leerMensajeError(res, 'No se pudo crear la cuenta.'));
       }
-    } catch (err) {
-      setError('Error de conexión con el servidor');
+    } catch {
+      setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+    }
+    setCargando(false);
+  };
+
+  const reenviarEmail = async () => {
+    setAvisoReenvio('');
+    try {
+      const res = await apiFetch('/api/usuarios/reenviar-verificacion', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      setAvisoReenvio(res.ok ? 'Listo, te enviamos un nuevo mail.' : await leerMensajeError(res, 'No se pudo reenviar el mail.'));
+    } catch {
+      setAvisoReenvio('No se pudo conectar con el servidor.');
     }
   };
 
@@ -139,11 +170,14 @@ function Registro() {
                 <p style={{ color: '#666666', fontSize: '0.95rem', lineHeight: '1.5', margin: '0' }}>
                   Te enviamos un enlace a <strong style={{ color: '#1a1a1a' }}>{email}</strong>
                 </p>
+                <p style={{ color: '#888888', fontSize: '0.85rem', lineHeight: '1.5', margin: '10px 0 0 0' }}>
+                  Abrilo para activar tu cuenta. Si no lo ves, revisá la carpeta de spam.
+                </p>
               </div>
 
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
                 <button 
-                  onClick={() => alert('¡Correo de verificación reenviado con éxito!')}
+                  onClick={reenviarEmail}
                   style={{ 
                     width: '100%',
                     padding: '14px', 
@@ -158,6 +192,7 @@ function Registro() {
                 >
                   Reenviar email
                 </button>
+                {avisoReenvio && <p style={{ color: '#666666', margin: '0', fontSize: '0.9rem' }}>{avisoReenvio}</p>}
 
                 <button 
                   onClick={() => navigate('/')}
@@ -239,6 +274,30 @@ function Registro() {
                     />
                   </div>
 
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Localidad</label>
+                      <input 
+                        type="text" 
+                        value={localidad} 
+                        onChange={(e) => setLocalidad(e.target.value)} 
+                        required 
+                        style={inputStyle}
+                        placeholder="Palermo"
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Provincia</label>
+                      <select 
+                        value={provincia} 
+                        onChange={(e) => setProvincia(e.target.value)}
+                        style={inputStyle}
+                      >
+                        {PROVINCIAS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
                   <div>
                     <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Teléfono</label>
                     <input 
@@ -307,6 +366,7 @@ function Registro() {
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                       required 
+                      minLength={8}
                       style={inputStyle}
                       placeholder="••••••••"
                     />
@@ -349,8 +409,10 @@ function Registro() {
                     </button>
                     <button 
                       type="submit" 
+                      disabled={cargando}
                       style={{ 
                         flex: 2,
+                        opacity: cargando ? 0.7 : 1,
                         padding: '14px', 
                         backgroundColor: '#F4D06F', 
                         color: '#1a1a1a',
@@ -361,7 +423,7 @@ function Registro() {
                         cursor: 'pointer'
                       }}
                     >
-                      Crear cuenta
+                      {cargando ? 'Creando cuenta...' : 'Crear cuenta'}
                     </button>
                   </div>
                 </form>

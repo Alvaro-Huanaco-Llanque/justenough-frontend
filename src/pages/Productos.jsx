@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch, obtenerUsuario, cerrarSesion, iniciales } from '../api';
 
 function Productos() {
   const navigate = useNavigate();
+  const usuario = obtenerUsuario();
+  const salir = () => { cerrarSesion(); navigate('/'); };
   const seccionActiva = 'productos';
 
   const [pestanaActiva, setPestanaActiva] = useState('productos'); 
@@ -33,8 +36,7 @@ function Productos() {
 
   const cargarProductos = async () => {
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await apiFetch('/api/productos');
       if (res.ok) {
         const data = await res.json();
         setProductos(data.map(p => ({
@@ -48,8 +50,7 @@ function Productos() {
 
   const cargarInsumos = async () => {
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/insumos', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await apiFetch('/api/insumos');
       if (res.ok) {
         const data = await res.json();
         setInsumos(data.map(i => ({
@@ -75,9 +76,8 @@ function Productos() {
     };
 
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/productos', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      const res = await apiFetch('/api/productos', {
+        method: 'POST',
         body: JSON.stringify(productoParaBackend)
       });
       if (res.ok) {
@@ -104,9 +104,8 @@ function Productos() {
     };
 
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/insumos', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      const res = await apiFetch('/api/insumos', {
+        method: 'POST',
         body: JSON.stringify(insumoParaBackend)
       });
       if (res.ok) cargarInsumos();
@@ -126,11 +125,10 @@ function Productos() {
 
   const confirmarBaja = async () => {
     const { tipo, id, modo, cantidadParcial, unidad, itemOriginal } = modalBaja;
-    const token = localStorage.getItem('jwt_token');
     
     if (modo === 'total') {
       try {
-        const res = await fetch(`http://localhost:8080/api/${tipo}s/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        const res = await apiFetch(`/api/${tipo}s/${id}`, { method: 'DELETE' });
         if (res.ok) {
           tipo === 'producto' ? setProductos(productos.filter(p => p.id !== id)) : setInsumos(insumos.filter(i => i.id !== id));
           setModalBaja({ ...modalBaja, activo: false });
@@ -152,8 +150,8 @@ function Productos() {
       if (nuevoStock < 0) { alert("El descuento ingresado es mayor al stock disponible."); return; }
       
       try {
-        const res = await fetch(`http://localhost:8080/api/${tipo}s/${id}/stock?nuevoStock=${nuevoStock}`, { 
-          method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } 
+        const res = await apiFetch(`/api/${tipo}s/${id}/stock?nuevoStock=${nuevoStock}`, { 
+          method: 'PUT' 
         });
         if (res.ok) {
           tipo === 'producto' ? cargarProductos() : cargarInsumos();
@@ -202,7 +200,7 @@ function Productos() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
           <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
           <div>
-            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block' }}>Panadería La Espiga</span>
+            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
             <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold' }}>PLAN BÁSICO</span>
           </div>
         </div>
@@ -214,6 +212,13 @@ function Productos() {
               {item.badge && <span style={{ backgroundColor: goldPrimary, color: '#FFF', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>{item.badge}</span>}
             </div>
           ))}
+        </div>
+        <div style={{ marginTop: 'auto', borderTop: `1px solid ${borderLight}`, paddingTop: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem', flexShrink: 0 }}>{iniciales(usuario?.nombre)}</div>
+          <div>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.nombre}</span>
+            <span onClick={salir} style={{ fontSize: '0.8rem', color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar sesión</span>
+          </div>
         </div>
       </div>
 

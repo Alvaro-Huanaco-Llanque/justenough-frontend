@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router-dom';
+import { obtenerUsuario, cerrarSesion, iniciales } from '../api';
 
 function Madurez() {
   const navigate = useNavigate();
+  const usuario = obtenerUsuario();
+  const salir = () => { cerrarSesion(); navigate('/'); };
   const seccionActiva = 'madurez';
 
   // Datos simulados de madurez del modelo
@@ -50,7 +53,7 @@ function Madurez() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
             <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
             <div>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>Panadería La Espiga</span>
+              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
               <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold', letterSpacing: '0.5px' }}>PLAN BÁSICO</span>
             </div>
           </div>
@@ -89,13 +92,13 @@ function Madurez() {
 
         <div style={{ borderTop: `1px solid ${borderLight}`, paddingTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem' }}>CM</div>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem' }}>{iniciales(usuario?.nombre)}</div>
             <div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>Camila Méndez</span>
-              <span style={{ fontSize: '0.8rem', color: '#888' }}>Dueña</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.nombre}</span>
+              <span onClick={salir} style={{ fontSize: '0.8rem', color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar sesión</span>
             </div>
           </div>
-          <span style={{ color: '#888', fontSize: '1.2rem' }}>›</span>
+          <span onClick={salir} title="Cerrar sesión" style={{ color: '#888', fontSize: '1.2rem', cursor: 'pointer' }}>⎋</span>
         </div>
       </div>
 

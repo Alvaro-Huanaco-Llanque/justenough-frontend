@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { obtenerUsuario, cerrarSesion, iniciales } from '../api';
 
 function Dashboard() {
   const navigate = useNavigate();
+  const usuario = obtenerUsuario();
+  const salir = () => { cerrarSesion(); navigate('/'); };
   const [seccionActiva, setSeccionActiva] = useState('principal');
   const [mostrarNotificaciones, setMostrarNotificaciones] = useState(false);
 
   // Datos simulados (Mock data) alineados a las capturas
   const resumen = {
-    usuario: "Camila",
     fecha: "Viernes, 12 de junio",
     metricas: {
       desperdicio: "91 uds. / $810.000",
@@ -83,7 +85,7 @@ function Dashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
             <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
             <div>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>Panadería La Espiga</span>
+              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
               <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold', letterSpacing: '0.5px' }}>PLAN BÁSICO</span>
             </div>
           </div>
@@ -160,14 +162,14 @@ function Dashboard() {
         <div style={{ borderTop: `1px solid ${borderLight}`, paddingTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem' }}>
-              CM
+              {iniciales(usuario?.nombre)}
             </div>
             <div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>Camila Méndez</span>
-              <span style={{ fontSize: '0.8rem', color: '#888' }}>Dueña</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.nombre}</span>
+              <span onClick={salir} style={{ fontSize: '0.8rem', color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar sesión</span>
             </div>
           </div>
-          <span style={{ color: '#888', fontSize: '1.2rem' }}>›</span>
+          <span onClick={salir} title="Cerrar sesión" style={{ color: '#888', fontSize: '1.2rem', cursor: 'pointer' }}>⎋</span>
         </div>
       </div>
 
@@ -190,7 +192,7 @@ function Dashboard() {
 
         {/* Saludo */}
         <div style={{ marginBottom: '20px' }}>
-          <h2 style={{ fontSize: '1.4rem', color: textDark, margin: '0 0 5px 0' }}>Buen día, {resumen.usuario}</h2>
+          <h2 style={{ fontSize: '1.4rem', color: textDark, margin: '0 0 5px 0' }}>Buen día, {usuario?.nombre?.split(' ')[0]}</h2>
           <p style={{ color: textGray, margin: 0, fontSize: '0.95rem' }}>Esto es lo que tenés que producir hoy.</p>
         </div>
 

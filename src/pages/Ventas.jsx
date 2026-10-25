@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch, obtenerUsuario, cerrarSesion, iniciales } from '../api';
 
 function Ventas() {
   const navigate = useNavigate();
+  const usuario = obtenerUsuario();
+  const salir = () => { cerrarSesion(); navigate('/'); };
   const seccionActiva = 'ventas';
 
   const hoyLocal = new Date().toLocaleDateString('en-CA');
@@ -24,8 +27,7 @@ function Ventas() {
 
   const cargarProductos = async () => {
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/productos', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await apiFetch('/api/productos');
       if (res.ok) {
         const data = await res.json();
         const activos = data.filter(p => p.activo);
@@ -41,8 +43,7 @@ function Ventas() {
 
   const cargarRegistros = async () => {
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/registros-diarios', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await apiFetch('/api/registros-diarios');
       if (res.ok) setRegistros(await res.json());
     } catch (err) { console.error("Error cargando registros", err); }
   };
@@ -94,9 +95,8 @@ function Ventas() {
 
     setGuardando(true);
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch('http://localhost:8080/api/registros-diarios/ventas-batch', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      const res = await apiFetch('/api/registros-diarios/ventas-batch', {
+        method: 'POST',
         body: JSON.stringify({ fecha: fecha, ventas: ventasAEnviar })
       });
       if (res.ok) {
@@ -115,9 +115,8 @@ function Ventas() {
   const guardarPrecioUnico = async (id) => {
     const nuevoPrecio = parseFloat(preciosInput[id]) || 0;
     try {
-      const token = localStorage.getItem('jwt_token');
-      const res = await fetch(`http://localhost:8080/api/productos/${id}/precio?nuevoPrecio=${nuevoPrecio}`, {
-        method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }
+      const res = await apiFetch(`/api/productos/${id}/precio?nuevoPrecio=${nuevoPrecio}`, {
+        method: 'PUT'
       });
       if (res.ok) {
         alert("Precio actualizado");
@@ -172,7 +171,7 @@ function Ventas() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
           <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
           <div>
-            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block' }}>Panadería La Espiga</span>
+            <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
             <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold' }}>PLAN BÁSICO</span>
           </div>
         </div>
@@ -184,6 +183,13 @@ function Ventas() {
               {item.badge && <span style={{ backgroundColor: goldPrimary, color: '#FFF', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>{item.badge}</span>}
             </div>
           ))}
+        </div>
+        <div style={{ marginTop: 'auto', borderTop: `1px solid ${borderLight}`, paddingTop: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem', flexShrink: 0 }}>{iniciales(usuario?.nombre)}</div>
+          <div>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.nombre}</span>
+            <span onClick={salir} style={{ fontSize: '0.8rem', color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar sesión</span>
+          </div>
         </div>
       </div>
 

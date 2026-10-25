@@ -1,33 +1,52 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch, guardarSesion, leerMensajeError } from '../api';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [sinVerificar, setSinVerificar] = useState(false);
+  const [avisoReenvio, setAvisoReenvio] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    
+    setSinVerificar(false);
+    setAvisoReenvio('');
+    setCargando(true);
+
     try {
-      const res = await fetch('http://localhost:8080/api/usuarios/login', {
+      const res = await apiFetch('/api/usuarios/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      
-      const data = await res.json();
-      
+
       if (res.ok) {
-        localStorage.setItem('jwt_token', data.token);
-        navigate('/dashboard'); 
+        guardarSesion(await res.json());
+        navigate('/dashboard');
       } else {
-        setError(data.message || 'Credenciales inválidas');
+        // 403 = la cuenta existe pero todavía no verificó el email
+        setSinVerificar(res.status === 403);
+        setError(await leerMensajeError(res, 'Email o contraseña incorrectos.'));
       }
-    } catch (err) {
-      setError('Error de conexión con el servidor');
+    } catch {
+      setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+    }
+    setCargando(false);
+  };
+
+  const reenviarEmail = async () => {
+    try {
+      const res = await apiFetch('/api/usuarios/reenviar-verificacion', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      setAvisoReenvio(res.ok ? 'Te enviamos un nuevo mail de verificación.' : await leerMensajeError(res, 'No se pudo reenviar el mail.'));
+    } catch {
+      setAvisoReenvio('No se pudo conectar con el servidor.');
     }
   };
 
@@ -116,22 +135,30 @@ function Login() {
             </div>
 
             {error && <p style={{ color: 'red', margin: '0', fontSize: '0.9rem' }}>{error}</p>}
+            {sinVerificar && (
+              <p style={{ margin: '0', fontSize: '0.9rem', color: '#666666' }}>
+                ¿No te llegó? <span onClick={reenviarEmail} style={{ color: '#B89732', cursor: 'pointer', fontWeight: 'bold' }}>Reenviar email de verificación</span>
+                {avisoReenvio && <span style={{ display: 'block', marginTop: '6px' }}>{avisoReenvio}</span>}
+              </p>
+            )}
 
-            <button 
-              type="submit" 
-              style={{ 
-                padding: '14px', 
-                backgroundColor: '#F4D06F', 
+            <button
+              type="submit"
+              disabled={cargando}
+              style={{
+                padding: '14px',
+                backgroundColor: '#F4D06F',
                 color: '#1a1a1a',
-                border: 'none', 
-                borderRadius: '8px', 
-                fontSize: '1rem', 
-                fontWeight: 'bold', 
-                cursor: 'pointer',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                cursor: cargando ? 'wait' : 'pointer',
+                opacity: cargando ? 0.7 : 1,
                 marginTop: '10px'
               }}
             >
-              Ingresar
+              {cargando ? 'Ingresando...' : 'Ingresar'}
             </button>
           </form>
 
