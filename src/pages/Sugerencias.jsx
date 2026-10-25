@@ -1,13 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { obtenerUsuario, cerrarSesion, iniciales } from '../api';
+import BarraLateral from '../components/BarraLateral';
 
 function Sugerencias() {
-  const navigate = useNavigate();
-  const usuario = obtenerUsuario();
-  const salir = () => { cerrarSesion(); navigate('/'); };
-  const seccionActiva = 'sugerencias';
-
   // Datos simulados de la tabla semanal
   const [sugerencias, setSugerencias] = useState([
     { id: 1, nombre: "Medialuna", lun: 110, mar: 105, mie: 115, jue: 120, vie: 140, sab: 180, dom: 160, confianza: "Alta", diaAjustado: "sab" },
@@ -55,20 +49,6 @@ function Sugerencias() {
     cerrarModal();
   };
 
-  const menuSidebar = [
-    { id: 'principal', label: 'Principal', icon: '🏠', ruta: '/dashboard' },
-    { id: 'producido', label: 'Producido / Compras', icon: '📦', ruta: '/producido' },
-    { id: 'ventas', label: 'Ventas', icon: '📈', ruta: '/ventas' },
-    { id: 'desechos', label: 'Desechos', icon: '🗑️', ruta: '/desechos' },
-    { id: 'sugerencias', label: 'Sugerencias', icon: '✨', badge: 3, ruta: '/sugerencias' },
-    { id: 'impacto', label: 'Impacto', icon: '📊', ruta: '/impacto' },
-    { id: 'productos', label: 'Productos', icon: '⭐', ruta: '/productos' },
-    { id: 'calendario', label: 'Calendario', icon: '📅', ruta: '/calendario' },
-    { id: 'madurez', label: 'Madurez', icon: '🌱', ruta: '/madurez' },
-  ];
-
-
-
   const getBadgeColor = (confianza) => {
     if (confianza === 'Alta') return { bg: '#E6F4EA', color: '#137333' };
     if (confianza === 'Media') return { bg: '#FEF7E0', color: '#B06000' };
@@ -86,60 +66,7 @@ function Sugerencias() {
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: '"Inter", "Segoe UI", Arial, sans-serif', backgroundColor: bgApp, boxSizing: 'border-box', overflow: 'hidden', position: 'relative' }}>
       
-      {/* ================= BARRA LATERAL ================= */}
-      <div style={{ width: '260px', height: '100%', backgroundColor: bgApp, borderRight: `1px solid ${borderLight}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '25px 20px', boxSizing: 'border-box', flexShrink: 0 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-            <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
-            <div>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
-              <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold', letterSpacing: '0.5px' }}>PLAN BÁSICO</span>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <span style={{ fontSize: '0.7rem', color: '#A0A0A0', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '10px', paddingLeft: '10px' }}>ESPACIO DE TRABAJO</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {menuSidebar.map((item) => (
-                <div 
-                  key={item.id}
-                  onClick={() => item.ruta !== '#' && navigate(item.ruta)}
-                  style={{ 
-                    padding: '10px 12px', borderRadius: '20px', cursor: 'pointer',
-                    backgroundColor: seccionActiva === item.id ? goldLight : 'transparent',
-                    color: seccionActiva === item.id ? '#1A1A1A' : textGray,
-                    fontWeight: seccionActiva === item.id ? 'bold' : '500',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.95rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ opacity: seccionActiva === item.id ? 1 : 0.6 }}>{item.icon}</span> {item.label}
-                  </div>
-                  {item.badge && <span style={{ backgroundColor: goldPrimary, color: '#FFF', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>{item.badge}</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <span style={{ fontSize: '0.7rem', color: '#A0A0A0', fontWeight: 'bold', letterSpacing: '0.5px', display: 'block', marginBottom: '10px', paddingLeft: '10px' }}>ADMINISTRACIÓN</span>
-            <div style={{ padding: '10px 12px', borderRadius: '20px', cursor: 'pointer', color: textGray, fontWeight: '500', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
-              <span style={{ opacity: 0.6 }}>⚙️</span> Configuración
-            </div>
-          </div>
-        </div>
-
-        <div style={{ borderTop: `1px solid ${borderLight}`, paddingTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#1A1A1A', fontSize: '0.9rem' }}>{iniciales(usuario?.nombre)}</div>
-            <div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{usuario?.nombre}</span>
-              <span onClick={salir} style={{ fontSize: '0.8rem', color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Cerrar sesión</span>
-            </div>
-          </div>
-          <span onClick={salir} title="Cerrar sesión" style={{ color: '#888', fontSize: '1.2rem', cursor: 'pointer' }}>⎋</span>
-        </div>
-      </div>
+      <BarraLateral seccionActiva="sugerencias" />
 
       {/* ================= CONTENIDO PRINCIPAL ================= */}
       <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '40px 50px', boxSizing: 'border-box' }}>

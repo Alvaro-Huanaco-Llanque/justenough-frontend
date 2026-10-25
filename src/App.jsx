@@ -13,6 +13,7 @@ import Calendario from './pages/Calendario';
 import Productos from './pages/Productos';
 import Impacto from './pages/Impacto';
 import VerificarEmail from './pages/VerificarEmail';
+import Catalogo from './pages/Catalogo';
 
 // Páginas que requieren haber iniciado sesión: sin token, vuelven al login
 function Privada({ children }) {
@@ -33,6 +34,7 @@ function App() {
         <Route path="/recuperar" element={<Publica><RecuperarPassword /></Publica>} />
         <Route path="/verificar" element={<VerificarEmail />} />
         <Route path="/dashboard" element={<Privada><Dashboard /></Privada>} />
+        <Route path="/catalogo" element={<Privada><Catalogo /></Privada>} />
         <Route path="/producido" element={<Privada><ProducidoCompras /></Privada>} />
         <Route path="/ventas" element={<Privada><Ventas /></Privada>} />
         <Route path="/desechos" element={<Privada><Desechos /></Privada>} />
