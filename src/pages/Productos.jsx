@@ -26,7 +26,7 @@ function Productos() {
         const res = await apiFetch('/api/productos');
         if (res.ok) {
           const data = await res.json();
-          setProductos(data.filter(p => p.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+          setProductos(data.filter(p => p.activo && p.controlaStock !== false).sort((a, b) => a.nombre.localeCompare(b.nombre)));
         }
       } catch {
         setAviso({ tipo: 'error', texto: 'No se pudo conectar con el servidor.' });
