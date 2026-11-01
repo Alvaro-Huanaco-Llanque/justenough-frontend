@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BarraLateral from '../components/BarraLateral';
+import { MensajeVacio } from '../components/Marca';
+import { BotonAlertas } from '../components/Alertas';
 import { apiFetch, leerMensajeError } from '../api';
+import { MOTIVOS_AJUSTE, hoyISO, unidadCorta } from '../utils/productos';
 
 const DIAS_KEYS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
 const DIAS_NOMBRES = {
@@ -17,14 +20,63 @@ function obtenerLunesActual() {
   return lunes.toLocaleDateString('en-CA'); // YYYY-MM-DD
 }
 
+function formatearConfianza(nivelEnum) {
+  if (!nivelEnum) return 'Baja';
+  const up = nivelEnum.toUpperCase();
+  if (up === 'ALTA') return 'Alta';
+  if (up === 'MEDIA') return 'Media';
+  return 'Baja';
+}
+
+// Agrupa las filas individuales de la BD (1 por día) en una fila semanal por producto
+function agruparPorProducto(listaSugerencias, lunesSemana) {
+  const mapa = {};
+  const baseLunes = new Date(lunesSemana + 'T00:00:00');
+
+  listaSugerencias.forEach((s) => {
+    if (!s.producto) return;
+    const pId = s.producto.id;
+    if (!mapa[pId]) {
+      mapa[pId] = {
+        id: pId,
+        nombre: s.producto.nombre,
+        unidadMedida: s.producto.unidadMedida || 'UNIDAD',
+        confianza: formatearConfianza(s.nivelConfianza),
+        dias: {}, // { lun: { sugerenciaId, sugerida, final, estado, fecha }, ... }
+        aceptadaCompleta: true
+      };
+    }
+
+    const fechaSug = new Date(s.fecha + 'T00:00:00');
+    const diffDias = Math.round((fechaSug - baseLunes) / (1000 * 60 * 60 * 24));
+    if (diffDias >= 0 && diffDias < 7) {
+      const key = DIAS_KEYS[diffDias];
+      mapa[pId].dias[key] = {
+        sugerenciaId: s.id,
+        sugerida: s.cantidadSugerida,
+        final: s.cantidadFinal,
+        estado: s.estado,
+        fecha: s.fecha
+      };
+      if (s.estado === 'PENDIENTE') {
+        mapa[pId].aceptadaCompleta = false;
+      }
+    }
+  });
+
+  return Object.values(mapa).sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
 function Sugerencias() {
   const navigate = useNavigate();
 
-  const [lunesSemana, setLunesSemana] = useState(obtenerLunesActual());
+  const [lunesSemana] = useState(obtenerLunesActual);
   const [filasProductos, setFilasProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState(null);
+  const [version, setVersion] = useState(0);   // cambiarla vuelve a pedir la semana
+  const recargar = () => setVersion(v => v + 1);
 
   // Estado del Modal de Ajuste
   const [modal, setModal] = useState({
@@ -35,113 +87,68 @@ function Sugerencias() {
     fechaDia: '',
     cantidadOriginal: '',
     nuevaCantidad: '',
-    motivo: 'Evento',
+    motivo: 'EVENTO',
     comentario: ''
   });
-
-  useEffect(() => {
-    cargarSugerenciasSemana(false);
-  }, [lunesSemana]);
+  const hoy = hoyISO();
 
   const mostrarAviso = (tipo, texto) => {
     setAviso({ tipo, texto });
     setTimeout(() => setAviso(null), 4000);
   };
 
-  const formatearConfianza = (nivelEnum) => {
-    if (!nivelEnum) return 'Baja';
-    const up = nivelEnum.toUpperCase();
-    if (up === 'ALTA') return 'Alta';
-    if (up === 'MEDIA') return 'Media';
-    return 'Baja';
-  };
-
-  const cargarSugerenciasSemana = async (regenerar = false) => {
-    if (regenerar) setProcesando(true);
-    else setCargando(true);
-
-    try {
-      const res = await apiFetch(`/api/sugerencias/semana?desde=${lunesSemana}&regenerar=${regenerar}`);
-      if (res.ok) {
-        const data = await res.json();
-        agruparPorProducto(data);
-        if (regenerar) mostrarAviso('ok', 'Predicciones recalculadas con el servicio de Python.');
-      } else {
-        mostrarAviso('error', await leerMensajeError(res, 'No se pudieron obtener las sugerencias.'));
-      }
-    } catch {
-      mostrarAviso('error', 'Error de conexión con el servidor.');
-    }
-    setCargando(false);
-    setProcesando(false);
-  };
-
-  // Agrupa las filas individuales de la BD (1 por día) en una fila semanal por producto
-  const agruparPorProducto = (listaSugerencias) => {
-    const mapa = {};
-    const baseLunes = new Date(lunesSemana + 'T00:00:00');
-
-    listaSugerencias.forEach((s) => {
-      if (!s.producto) return;
-      const pId = s.producto.id;
-      if (!mapa[pId]) {
-        mapa[pId] = {
-          id: pId,
-          nombre: s.producto.nombre,
-          unidadMedida: s.producto.unidadMedida || 'UNIDAD',
-          confianza: formatearConfianza(s.nivelConfianza),
-          dias: {}, // { lun: { id, sugerida, final, estado, fecha }, ... }
-          aceptadaCompleta: true
-        };
-      }
-
-      const fechaSug = new Date(s.fecha + 'T00:00:00');
-      const diffDias = Math.round((fechaSug - baseLunes) / (1000 * 60 * 60 * 24));
-      if (diffDias >= 0 && diffDias < 7) {
-        const key = DIAS_KEYS[diffDias];
-        mapa[pId].dias[key] = {
-          sugerenciaId: s.id,
-          sugerida: s.cantidadSugerida,
-          final: s.cantidadFinal,
-          estado: s.estado,
-          fecha: s.fecha
-        };
-        if (s.estado === 'PENDIENTE') {
-          mapa[pId].aceptadaCompleta = false;
+  // Sugerencias de la semana. El backend calcula las que falten y recalcula solo con la IA
+  // cuando hay cargas nuevas (ventas, producción, desechos o eventos), así que no hace falta un botón.
+  useEffect(() => {
+    let vigente = true;
+    const cargar = async () => {
+      try {
+        const res = await apiFetch(`/api/sugerencias/semana?desde=${lunesSemana}`);
+        if (!vigente) return;
+        if (res.ok) {
+          setFilasProductos(agruparPorProducto((await res.json()).sugerencias, lunesSemana));
+        } else {
+          setAviso({ tipo: 'error', texto: await leerMensajeError(res, 'No se pudieron obtener las sugerencias.') });
         }
+      } catch {
+        if (vigente) setAviso({ tipo: 'error', texto: 'Error de conexión con el servidor.' });
       }
-    });
+      if (vigente) setCargando(false);
+    };
+    cargar();
+    return () => { vigente = false; };
+  }, [lunesSemana, version]);
 
-    const arreglo = Object.values(mapa).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    setFilasProductos(arreglo);
-  };
+  // Solo se pueden ajustar los días de hoy en adelante
+  const esEditable = (infoDia) => Boolean(infoDia) && infoDia.fecha >= hoy;
 
-  const abrirModalAjuste = (prod, diaInicial = 'sab') => {
-    const infoDia = prod.dias[diaInicial] || Object.values(prod.dias)[0];
-    if (!infoDia) return;
+  const abrirModalAjuste = (prod, diaInicial) => {
+    const clave = esEditable(prod.dias[diaInicial]) ? diaInicial : DIAS_KEYS.find(d => esEditable(prod.dias[d]));
+    const infoDia = clave && prod.dias[clave];
+    if (!infoDia) { mostrarAviso('error', 'No quedan días de esta semana para ajustar.'); return; }
 
     setModal({
       abierto: true,
       producto: prod,
-      diaKey: diaInicial,
+      diaKey: clave,
       sugerenciaId: infoDia.sugerenciaId,
       fechaDia: infoDia.fecha,
-      cantidadOriginal: `${infoDia.sugerida} uds.`,
+      cantidadOriginal: `${infoDia.sugerida} ${unidadCorta(prod.unidadMedida)}`,
       nuevaCantidad: String(infoDia.final),
-      motivo: 'Evento',
+      motivo: 'EVENTO',
       comentario: ''
     });
   };
 
   const cambiarDiaEnModal = (nuevoDiaKey) => {
     const infoDia = modal.producto?.dias[nuevoDiaKey];
-    if (!infoDia) return;
+    if (!esEditable(infoDia)) return;
     setModal({
       ...modal,
       diaKey: nuevoDiaKey,
       sugerenciaId: infoDia.sugerenciaId,
       fechaDia: infoDia.fecha,
-      cantidadOriginal: `${infoDia.sugerida} uds.`,
+      cantidadOriginal: `${infoDia.sugerida} ${unidadCorta(modal.producto.unidadMedida)}`,
       nuevaCantidad: String(infoDia.final)
     });
   };
@@ -169,7 +176,7 @@ function Sugerencias() {
       if (res.ok) {
         mostrarAviso('ok', `Ajuste guardado para ${modal.producto.nombre} (${DIAS_NOMBRES[modal.diaKey]}).`);
         cerrarModal();
-        cargarSugerenciasSemana(false);
+        recargar();
       } else {
         alert(await leerMensajeError(res, 'No se pudo guardar el ajuste.'));
       }
@@ -185,7 +192,9 @@ function Sugerencias() {
       });
       if (res.ok) {
         mostrarAviso('ok', `Plan semanal de ${nombre} aceptado.`);
-        cargarSugerenciasSemana(false);
+        recargar();
+      } else {
+        mostrarAviso('error', await leerMensajeError(res, 'No se pudo aceptar la sugerencia.'));
       }
     } catch {
       mostrarAviso('error', 'No se pudo aceptar la sugerencia.');
@@ -200,7 +209,9 @@ function Sugerencias() {
       });
       if (res.ok) {
         mostrarAviso('ok', '¡Todas las sugerencias de la semana fueron aceptadas!');
-        cargarSugerenciasSemana(false);
+        recargar();
+      } else {
+        mostrarAviso('error', await leerMensajeError(res, 'No se pudieron aceptar las sugerencias.'));
       }
     } catch {
       mostrarAviso('error', 'No se pudieron aceptar las sugerencias.');
@@ -245,9 +256,7 @@ function Sugerencias() {
               {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
-          <button style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: bgCard, border: `1px solid ${borderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.2rem', color: textGray }}>
-            🔔
-          </button>
+          <BotonAlertas />
         </div>
 
         {/* Título de la Semana y Botones */}
@@ -257,14 +266,6 @@ function Sugerencias() {
             <p style={{ color: textGray, margin: 0, fontSize: '0.95rem' }}>Revisá y aceptá el plan sugerido por el modelo predictivo.</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button
-              onClick={() => cargarSugerenciasSemana(true)}
-              disabled={procesando}
-              title="Volver a consultar al microservicio de Python con las últimas ventas"
-              style={{ padding: '10px 16px', backgroundColor: bgCard, color: textDark, border: `1px solid ${borderLight}`, borderRadius: '8px', fontWeight: 'bold', cursor: procesando ? 'not-allowed' : 'pointer', fontSize: '0.9rem' }}
-            >
-              {procesando ? 'Calculando...' : '🔄 Recalcular con IA'}
-            </button>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
               🍪
             </div>
@@ -303,9 +304,9 @@ function Sugerencias() {
             </thead>
             <tbody>
               {cargando ? (
-                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}>Generando predicciones con Python...</td></tr>
+                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}>Calculando predicciones...</td></tr>
               ) : filasProductos.length === 0 ? (
-                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}>No hay productos de stock activos en el catálogo para predecir.</td></tr>
+                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}><MensajeVacio>No hay productos de stock activos en el catálogo para predecir.</MensajeVacio></td></tr>
               ) : (
                 filasProductos.map((prod, index) => {
                   const badge = getBadgeColor(prod.confianza);
@@ -319,23 +320,24 @@ function Sugerencias() {
                         const valorMostrar = celda ? celda.final : '-';
                         const fueAjustado = celda && celda.estado === 'AJUSTADA';
                         const fueAceptado = celda && celda.estado === 'ACEPTADA';
+                        const editable = esEditable(celda);
 
                         return (
                           <td key={dia} style={{ padding: '15px 10px' }}>
                             <div
-                              onClick={() => celda && abrirModalAjuste(prod, dia)}
-                              title="Hacé clic para ajustar este día"
-                              style={{ 
+                              onClick={() => editable && abrirModalAjuste(prod, dia)}
+                              title={editable ? 'Hacé clic para ajustar este día' : celda ? 'Este día ya pasó' : 'Sin sugerencia para este día'}
+                              style={{
                                 display: 'inline-block',
-                                padding: '8px 16px', 
-                                borderRadius: '8px', 
+                                padding: '8px 16px',
+                                borderRadius: '8px',
                                 border: fueAjustado ? `2px solid #F4D06F` : (fueAceptado ? `1px solid #137333` : `1px solid ${borderLight}`),
                                 backgroundColor: fueAjustado ? '#FDF8EC' : (fueAceptado ? '#F4FBF6' : bgCard),
-                                color: textDark, 
+                                color: editable ? textDark : '#A0A0A0',
                                 fontWeight: '600',
                                 fontSize: '0.9rem',
                                 position: 'relative',
-                                cursor: 'pointer'
+                                cursor: editable ? 'pointer' : 'default'
                               }}
                             >
                               {valorMostrar}
@@ -363,7 +365,7 @@ function Sugerencias() {
                             {prod.aceptadaCompleta ? '✓ Aceptado' : 'Aceptar'}
                           </button>
                           <button 
-                            onClick={() => abrirModalAjuste(prod, 'sab')}
+                            onClick={() => abrirModalAjuste(prod)}
                             style={{ padding: '6px 12px', backgroundColor: bgCard, color: textDark, border: `1px solid ${borderLight}`, borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}
                           >
                             Ajustar
@@ -408,12 +410,13 @@ function Sugerencias() {
                   <button
                     key={d}
                     onClick={() => cambiarDiaEnModal(d)}
+                    disabled={!esEditable(modal.producto.dias[d])}
                     style={{
                       flex: 1, padding: '6px 0', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 'bold',
-                      textTransform: 'uppercase', cursor: 'pointer',
+                      textTransform: 'uppercase', cursor: esEditable(modal.producto.dias[d]) ? 'pointer' : 'not-allowed',
                       border: modal.diaKey === d ? `2px solid ${goldPrimary}` : `1px solid ${borderLight}`,
                       backgroundColor: modal.diaKey === d ? '#FDF8EC' : bgCard,
-                      color: textDark
+                      color: esEditable(modal.producto.dias[d]) ? textDark : '#C0C0C0'
                     }}
                   >
                     {d}
@@ -440,18 +443,18 @@ function Sugerencias() {
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Motivo</label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['Feriado', 'Evento', 'Promoción', 'Clima', 'Otro'].map(m => (
-                  <button 
-                    key={m}
-                    onClick={() => setModal({...modal, motivo: m})}
-                    style={{ 
+                {MOTIVOS_AJUSTE.map(m => (
+                  <button
+                    key={m.valor}
+                    onClick={() => setModal({...modal, motivo: m.valor})}
+                    style={{
                       padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer',
-                      border: modal.motivo === m ? `1px solid transparent` : `1px solid ${borderLight}`,
-                      backgroundColor: modal.motivo === m ? '#F4D06F' : bgCard,
+                      border: modal.motivo === m.valor ? `1px solid transparent` : `1px solid ${borderLight}`,
+                      backgroundColor: modal.motivo === m.valor ? '#F4D06F' : bgCard,
                       color: textDark
                     }}
                   >
-                    {m}
+                    {m.etiqueta}
                   </button>
                 ))}
               </div>
@@ -461,6 +464,7 @@ function Sugerencias() {
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Comentario</label>
               <textarea 
                 rows="2"
+                maxLength={255}
                 value={modal.comentario}
                 onChange={(e) => setModal({...modal, comentario: e.target.value})}
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${borderLight}`, outline: 'none', backgroundColor: bgCard, color: textDark, fontSize: '0.95rem', boxSizing: 'border-box', resize: 'none' }} 

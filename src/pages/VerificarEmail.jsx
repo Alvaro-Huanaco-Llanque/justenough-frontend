@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Logo } from '../components/Marca';
 import { apiFetch, guardarSesion, leerMensajeError } from '../api';
 
 // Página a la que lleva el link del mail de verificación: /verificar?token=...
@@ -88,7 +89,7 @@ function VerificarEmail() {
       {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
       <div style={{ flex: 1, backgroundColor: '#F7F4EB', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
-          <span style={{ color: '#D4AF37', fontSize: '1.5rem', fontWeight: 'bold' }}>(o)</span>
+          <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
         </div>
         <h1 style={{ fontSize: '3.2rem', color: '#1a1a1a', lineHeight: '1.15', margin: '0 0 15px 0' }}>Producí lo justo.</h1>

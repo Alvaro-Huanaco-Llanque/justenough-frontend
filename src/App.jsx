@@ -14,6 +14,8 @@ import Productos from './pages/Productos';
 import Impacto from './pages/Impacto';
 import VerificarEmail from './pages/VerificarEmail';
 import Catalogo from './pages/Catalogo';
+import Configuracion from './pages/Configuracion';
+import RestablecerPassword from './pages/RestablecerPassword';
 
 // Páginas que requieren haber iniciado sesión: sin token, vuelven al login
 function Privada({ children }) {
@@ -33,6 +35,7 @@ function App() {
         <Route path="/registro" element={<Publica><Registro /></Publica>} />
         <Route path="/recuperar" element={<Publica><RecuperarPassword /></Publica>} />
         <Route path="/verificar" element={<VerificarEmail />} />
+        <Route path="/restablecer" element={<RestablecerPassword />} />
         <Route path="/dashboard" element={<Privada><Dashboard /></Privada>} />
         <Route path="/catalogo" element={<Privada><Catalogo /></Privada>} />
         <Route path="/producido" element={<Privada><ProducidoCompras /></Privada>} />
@@ -43,6 +46,7 @@ function App() {
         <Route path="/calendario" element={<Privada><Calendario /></Privada>} />
         <Route path="/productos" element={<Privada><Productos /></Privada>} />
         <Route path="/impacto" element={<Privada><Impacto /></Privada>} />
+        <Route path="/configuracion" element={<Privada><Configuracion /></Privada>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

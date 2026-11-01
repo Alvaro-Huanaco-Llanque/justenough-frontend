@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import BarraLateral from '../components/BarraLateral';
+import { MensajeVacio } from '../components/Marca';
 import { apiFetch, leerMensajeError } from '../api';
 import { UNIDADES, MODALIDADES, unidadCorta, formatearPrecio } from '../utils/productos';
 
@@ -170,7 +171,7 @@ function Catalogo() {
               )}
               {!cargando && productos.length === 0 && (
                 <tr><td colSpan={8} style={{ ...td, textAlign: 'center', padding: '40px' }}>
-                  Todavía no tenés productos en el catálogo. Empezá con <b>+ Nuevo producto</b> (ej: medialuna, scon, cookie).
+                  <MensajeVacio>Todavía no tenés productos en el catálogo. Empezá con <b>+ Nuevo producto</b> (ej: medialuna, scon, cookie).</MensajeVacio>
                 </td></tr>
               )}
               {productos.map((p, i) => {

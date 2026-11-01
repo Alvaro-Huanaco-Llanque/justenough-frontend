@@ -1,42 +1,49 @@
 import { useState, useEffect } from 'react';
 import BarraLateral from '../components/BarraLateral';
 import { apiFetch, leerMensajeError } from '../api';
+import { hoyISO, sumarDias, formatearFechaLarga, unidadCorta } from '../utils/productos';
+
+// Conversión entre unidades de la misma familia (peso o volumen): cuántas unidades base tiene cada una
+const EQUIVALENCIAS = { KG: { familia: 'peso', base: 1000 }, GRAMO: { familia: 'peso', base: 1 }, LITRO: { familia: 'volumen', base: 1000 }, ML: { familia: 'volumen', base: 1 } };
+
+// Pasa una cantidad cargada en "unidadCargada" a la unidad en que se vende el producto.
+// Devuelve null si no se puede convertir (ej: kilos a unidades).
+function convertir(cantidad, unidadCargada, unidadProducto) {
+  if (!unidadCargada || unidadCargada === unidadProducto) return cantidad;
+  const origen = EQUIVALENCIAS[unidadCargada];
+  const destino = EQUIVALENCIAS[unidadProducto];
+  if (!origen || !destino || origen.familia !== destino.familia) return null;
+  return cantidad * origen.base / destino.base;
+}
+
+let siguienteFila = 1;
+const filaVacia = () => ({ id: siguienteFila++, productoId: '', cantidad: '', unidad: '' });
 
 function Ventas() {
-  const hoyLocal = new Date().toLocaleDateString('en-CA');
-  const [fecha, setFecha] = useState(hoyLocal);
+  const [fecha, setFecha] = useState(hoyISO());
   
   const [productos, setProductos] = useState([]);
   const [registros, setRegistros] = useState([]);
   
-  const [ventas, setVentas] = useState([{ id: Date.now(), productoId: '', cantidad: '', unidad: '' }]);
+  const [ventas, setVentas] = useState(() => [filaVacia()]);
   const [guardando, setGuardando] = useState(false);
   const [fechasExpandidas, setFechasExpandidas] = useState({});
+  const [version, setVersion] = useState(0);   // cambiarla vuelve a pedir productos y registros
 
+  // Productos (con su stock) y registros, al entrar y después de cada carga
   useEffect(() => {
-    cargarProductos();
-    cargarRegistros();
-  }, []);
-
-  const cargarProductos = async () => {
-    try {
-      const res = await apiFetch('/api/productos');
-      if (res.ok) {
-        const data = await res.json();
-        setProductos(data.filter(p => p.activo));
-      }
-    } catch (err) { console.error("Error cargando productos", err); }
-  };
-
-  const cargarRegistros = async () => {
-    try {
-      const res = await apiFetch('/api/registros-diarios');
-      if (res.ok) setRegistros(await res.json());
-    } catch (err) { console.error("Error cargando registros", err); }
-  };
+    const cargar = async () => {
+      try {
+        const [resProductos, resRegistros] = await Promise.all([apiFetch('/api/productos'), apiFetch('/api/registros-diarios')]);
+        if (resProductos.ok) setProductos((await resProductos.json()).filter(p => p.activo));
+        if (resRegistros.ok) setRegistros(await resRegistros.json());
+      } catch (err) { console.error("Error cargando productos y registros", err); }
+    };
+    cargar();
+  }, [version]);
 
   // ================= MANEJO DE VENTAS =================
-  const agregarFilaVenta = () => setVentas([...ventas, { id: Date.now(), productoId: '', cantidad: '', unidad: '' }]);
+  const agregarFilaVenta = () => setVentas([...ventas, filaVacia()]);
   
   const actualizarFilaVenta = (id, campo, valor) => {
     setVentas(ventas.map(v => {
@@ -57,27 +64,23 @@ function Ventas() {
   const guardarVentasDelDia = async () => {
     const ventasAEnviar = {};
     let hayVentasValidas = false;
+    let errorUnidad = null;
 
     ventas.forEach(v => {
       if (v.productoId && v.cantidad > 0) {
         hayVentasValidas = true;
         const prod = productos.find(p => p.id.toString() === v.productoId);
-        let cantConvertida = parseFloat(v.cantidad);
-        
-        if (prod && v.unidad) {
-          const baseUnit = prod.unidadMedida.toLowerCase();
-          const targetUnit = v.unidad.toLowerCase();
-          if (baseUnit === 'kg' && targetUnit === 'gr') cantConvertida /= 1000;
-          else if (baseUnit === 'gr' && targetUnit === 'kg') cantConvertida *= 1000;
-          else if (baseUnit === 'litro' && targetUnit === 'ml') cantConvertida /= 1000;
-          else if (baseUnit === 'ml' && targetUnit === 'litro') cantConvertida *= 1000;
+        const cantConvertida = prod ? convertir(parseFloat(v.cantidad), v.unidad, prod.unidadMedida) : parseFloat(v.cantidad);
+        if (cantConvertida === null) {
+          errorUnidad = `${prod.nombre} se vende por ${prod.unidadMedida.toLowerCase()}: no se puede cargar en ${v.unidad.toLowerCase()}.`;
+          return;
         }
-
         const actual = ventasAEnviar[v.productoId] || 0;
         ventasAEnviar[v.productoId] = actual + cantConvertida;
       }
     });
-    
+
+    if (errorUnidad) { alert(errorUnidad); return; }
     if (!hayVentasValidas) { alert("Completá al menos un producto para guardar."); return; }
 
     setGuardando(true);
@@ -89,14 +92,13 @@ function Ventas() {
       });
       if (res.ok) {
         alert("¡Ventas registradas con éxito!");
-        setVentas([{ id: Date.now(), productoId: '', cantidad: '', unidad: '' }]); 
-        cargarRegistros(); 
-        cargarProductos();
+        setVentas([filaVacia()]);
+        setVersion(v => v + 1);
       } else {
         const msg = await leerMensajeError(res, "Error al guardar las ventas");
         alert(msg);
       }
-    } catch (error) { alert("Error de conexión con el servidor."); }
+    } catch { alert("Error de conexión con el servidor."); }
     setGuardando(false);
   };
 
@@ -107,7 +109,7 @@ function Ventas() {
   const unidadesHoy = registrosHoy.reduce((acc, r) => acc + r.cantidadVendida, 0);
   const gananciasHoy = registrosHoy.reduce((acc, r) => acc + (r.cantidadVendida * (r.producto?.precioVenta || 0)), 0);
   
-  const hace7Dias = new Date(new Date(fecha).getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const hace7Dias = sumarDias(fecha, -7);
   const registrosSemanaPasada = registros.filter(r => r.fecha === hace7Dias);
   const gananciasSemanaPasada = registrosSemanaPasada.reduce((acc, r) => acc + (r.cantidadVendida * (r.producto?.precioVenta || 0)), 0);
   
@@ -122,7 +124,7 @@ function Ventas() {
       const precio = reg.producto.precioVenta || 0;
       historialAgrupado[reg.fecha].totalUds += reg.cantidadVendida;
       historialAgrupado[reg.fecha].totalArs += (reg.cantidadVendida * precio);
-      historialAgrupado[reg.fecha].detalle.push({ nombre: reg.producto.nombre, cant: reg.cantidadVendida, subtotal: reg.cantidadVendida * precio });
+      historialAgrupado[reg.fecha].detalle.push({ nombre: reg.producto.nombre, cant: reg.cantidadVendida, unidad: unidadCorta(reg.producto.unidadMedida), subtotal: reg.cantidadVendida * precio });
     }
   });
   const historialArray = Object.values(historialAgrupado).sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
@@ -147,7 +149,7 @@ function Ventas() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', backgroundColor: bgCard, border: `1px solid ${borderLight}`, borderRadius: '8px', padding: '8px 15px' }}>
             <span style={{ marginRight: '10px', color: textGray }}>📅</span>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ border: 'none', outline: 'none', color: '#0056b3', fontWeight: 'bold', fontSize: '1rem', backgroundColor: 'transparent' }} />
+            <input type="date" value={fecha} max={hoyISO()} onChange={(e) => e.target.value && setFecha(e.target.value)} style={{ border: 'none', outline: 'none', color: '#0056b3', fontWeight: 'bold', fontSize: '1rem', backgroundColor: 'transparent' }} />
           </div>
         </div>
 
@@ -157,10 +159,10 @@ function Ventas() {
             <div style={{ width: '50px', height: '50px', backgroundColor: '#FDF8EC', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>🧾</div>
             <div>
               <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: textDark }}>
-                {gananciasHoy > 0 ? `$ ${gananciasHoy.toLocaleString('es-AR')} ARS` : `${unidadesHoy} uds.`}
+                {gananciasHoy > 0 ? `$ ${gananciasHoy.toLocaleString('es-AR')} ARS` : `${unidadesHoy} unidades`}
               </div>
               <div style={{ color: textGray, fontSize: '0.9rem', marginTop: '4px' }}>
-                {gananciasHoy > 0 ? `Ingreso estimado (${unidadesHoy} uds. vendidas)` : 'Vendidas en la fecha seleccionada'}
+                {gananciasHoy > 0 ? `Ingreso estimado (${unidadesHoy} unidades vendidas)` : 'Vendidas en la fecha seleccionada'}
               </div>
             </div>
           </div>
@@ -208,7 +210,7 @@ function Ventas() {
                   </td>
                   <td style={{ padding: '15px 0' }}>
                     <select value={venta.unidad} onChange={(e) => actualizarFilaVenta(venta.id, 'unidad', e.target.value)} style={{ ...inputStyle, width: '90%', textTransform: 'lowercase' }}>
-                      <option value="">-</option><option value="UNIDAD">un</option><option value="KG">kg</option><option value="GR">gr</option><option value="LITRO">litro</option><option value="ML">ml</option>
+                      <option value="">-</option><option value="UNIDAD">unidades</option><option value="KG">kg</option><option value="GRAMO">g</option><option value="LITRO">litro</option><option value="ML">ml</option>
                     </select>
                   </td>
                   <td style={{ padding: '15px 0', textAlign: 'center' }}>
@@ -241,16 +243,16 @@ function Ventas() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                       <div style={{ fontSize: '1.2rem' }}>📅</div>
                       <div>
-                        <div style={{ fontWeight: 'bold', color: textDark, fontSize: '1.05rem' }}>{hist.fecha}</div>
+                        <div style={{ fontWeight: 'bold', color: textDark, fontSize: '1.05rem' }}>{formatearFechaLarga(hist.fecha)}</div>
                         <div style={{ color: textGray, fontSize: '0.85rem', marginTop: '4px' }}>{hist.detalle.length} productos con ventas</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 'bold', color: hist.totalArs > 0 ? '#137333' : textDark, fontSize: '1.05rem' }}>
-                          {hist.totalArs > 0 ? `$ ${hist.totalArs.toLocaleString('es-AR')} ARS` : `${hist.totalUds} uds.`}
+                          {hist.totalArs > 0 ? `$ ${hist.totalArs.toLocaleString('es-AR')} ARS` : `${hist.totalUds} unidades`}
                         </div>
-                        <div style={{ color: textGray, fontSize: '0.85rem', marginTop: '4px' }}>{hist.totalUds} uds. vendidas</div>
+                        <div style={{ color: textGray, fontSize: '0.85rem', marginTop: '4px' }}>{hist.totalUds} unidades vendidas</div>
                       </div>
                       <div style={{ color: textGray, fontSize: '1.2rem', transform: expandido ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
                     </div>
@@ -259,9 +261,9 @@ function Ventas() {
                     <div style={{ padding: '20px', backgroundColor: '#FAF9F6', borderTop: `1px solid ${borderLight}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                       {hist.detalle.map((item, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px dashed #DCCDB8`, paddingBottom: '8px' }}>
-                          <span style={{ color: textDark, fontWeight: '500', fontSize: '0.95rem' }}>{item.nombre} ({item.cant} uds.)</span>
+                          <span style={{ color: textDark, fontWeight: '500', fontSize: '0.95rem' }}>{item.nombre} ({item.cant} {item.unidad})</span>
                           <span style={{ color: '#B89732', fontWeight: 'bold', fontSize: '0.95rem' }}>
-                            {item.subtotal > 0 ? `$ ${item.subtotal.toLocaleString('es-AR')}` : `${item.cant} uds.`}
+                            {item.subtotal > 0 ? `$ ${item.subtotal.toLocaleString('es-AR')}` : `${item.cant} ${item.unidad}`}
                           </span>
                         </div>
                       ))}

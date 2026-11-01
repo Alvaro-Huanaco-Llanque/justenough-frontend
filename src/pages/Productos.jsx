@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BarraLateral from '../components/BarraLateral';
+import { MensajeVacio } from '../components/Marca';
 import { apiFetch, leerMensajeError } from '../api';
 import { unidadCorta, etiquetaModalidad, formatearCantidad } from '../utils/productos';
 
@@ -125,8 +126,10 @@ function Productos() {
               )}
               {!cargando && productos.length === 0 && (
                 <tr><td colSpan={6} style={{ padding: '40px', color: textGray }}>
-                  Todavía no hay productos.{' '}
-                  <span onClick={() => navigate('/catalogo')} style={{ color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Agregalos en el Catálogo →</span>
+                  <MensajeVacio>
+                    Todavía no hay productos.{' '}
+                    <span onClick={() => navigate('/catalogo')} style={{ color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Agregalos en el Catálogo →</span>
+                  </MensajeVacio>
                 </td></tr>
               )}
               {!cargando && datosPaginados.map((item, index) => {

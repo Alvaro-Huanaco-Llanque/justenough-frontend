@@ -1,17 +1,20 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { obtenerUsuario, cerrarSesion, iniciales } from '../api';
+import { obtenerUsuario, cerrarSesion, iniciales, apiFetch } from '../api';
+import { Logo } from './Marca';
 
 // Opciones del menú. Para agregar, renombrar o reordenar una sección, se cambia solo acá.
+// "conPendientes": muestra la cantidad de productos con sugerencias sin revisar.
 const MENU = [
   { id: 'principal', label: 'Principal', icon: '🏠', ruta: '/dashboard' },
-  { id: 'sugerencias', label: 'Sugerencias', icon: '✨', badge: 3, ruta: '/sugerencias' },
+  { id: 'productos', label: 'Inventario', icon: '⭐', ruta: '/productos' },
   { id: 'ventas', label: 'Ventas', icon: '📈', ruta: '/ventas' },
   { id: 'desechos', label: 'Desechos', icon: '🗑️', ruta: '/desechos' },
   { id: 'producido', label: 'Producido / Compras', icon: '📦', ruta: '/producido' },
-  { id: 'productos', label: 'Inventario', icon: '⭐', ruta: '/productos' },
+  { id: 'sugerencias', label: 'Sugerencias', icon: '✨', conPendientes: true, ruta: '/sugerencias' },
   { id: 'catalogo', label: 'Catálogo', icon: '📋', ruta: '/catalogo' },
-  { id: 'impacto', label: 'Impacto', icon: '📊', ruta: '/impacto' },
   { id: 'calendario', label: 'Calendario', icon: '📅', ruta: '/calendario' },
+  { id: 'impacto', label: 'Impacto', icon: '📊', ruta: '/impacto' },
   { id: 'madurez', label: 'Madurez', icon: '🌱', ruta: '/madurez' },
 ];
 
@@ -30,6 +33,16 @@ function BarraLateral({ seccionActiva }) {
   const navigate = useNavigate();
   const usuario = obtenerUsuario();
   const salir = () => { cerrarSesion(); navigate('/'); };
+  const [pendientes, setPendientes] = useState(0);
+
+  useEffect(() => {
+    let vigente = true;
+    apiFetch('/api/sugerencias/pendientes')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (vigente && data) setPendientes(data.productos); })
+      .catch(() => {});
+    return () => { vigente = false; };
+  }, [seccionActiva]);
 
   const estiloItem = (activo) => ({
     padding: '10px 12px', borderRadius: '20px', cursor: 'pointer',
@@ -44,7 +57,7 @@ function BarraLateral({ seccionActiva }) {
       <div>
         {/* Logo y comercio */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-          <span style={{ color: goldPrimary, fontSize: '1.8rem', fontWeight: 'bold' }}>(o)</span>
+          <Logo tamano={42} />
           <div>
             <span style={{ fontSize: '1rem', fontWeight: 'bold', color: textDark, display: 'block', lineHeight: '1.2' }}>{usuario?.comercio?.nombre ?? 'Mi comercio'}</span>
             <span style={{ fontSize: '0.7rem', color: '#B89732', fontWeight: 'bold', letterSpacing: '0.5px' }}>PLAN BÁSICO</span>
@@ -62,18 +75,18 @@ function BarraLateral({ seccionActiva }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{ opacity: activo ? 1 : 0.6 }}>{item.icon}</span> {item.label}
                   </div>
-                  {item.badge && <span style={{ backgroundColor: goldPrimary, color: '#FFF', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>{item.badge}</span>}
+                  {item.conPendientes && pendientes > 0 && <span title="Productos con sugerencias sin revisar" style={{ backgroundColor: goldPrimary, color: '#FFF', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>{pendientes}</span>}
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Administración (la página de configuración todavía no existe) */}
+        {/* Administración */}
         <div>
           <span style={tituloSeccion}>ADMINISTRACIÓN</span>
-          <div style={{ ...estiloItem(seccionActiva === 'configuracion'), justifyContent: 'flex-start', gap: '12px' }}>
-            <span style={{ opacity: 0.6 }}>⚙️</span> Configuración
+          <div onClick={() => navigate('/configuracion')} style={{ ...estiloItem(seccionActiva === 'configuracion'), justifyContent: 'flex-start', gap: '12px' }}>
+            <span style={{ opacity: seccionActiva === 'configuracion' ? 1 : 0.6 }}>⚙️</span> Configuración
           </div>
         </div>
       </div>

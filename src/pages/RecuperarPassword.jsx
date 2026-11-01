@@ -1,14 +1,28 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Logo } from '../components/Marca';
+import { apiFetch, leerMensajeError } from '../api';
 
+// Pide el link para restablecer la contraseña. El backend responde lo mismo exista o no la cuenta.
 function RecuperarPassword() {
   const [email, setEmail] = useState('');
-  const [enviado, setEnviado] = useState(false);
+  const [enviado, setEnviado] = useState('');
+  const [error, setError] = useState('');
+  const [enviando, setEnviando] = useState(false);
   const navigate = useNavigate();
 
-  const handleRecuperar = (e) => {
+  const handleRecuperar = async (e) => {
     e.preventDefault();
-    setEnviado(true);
+    setError('');
+    setEnviando(true);
+    try {
+      const res = await apiFetch('/api/usuarios/recuperar', { method: 'POST', body: JSON.stringify({ email }) });
+      if (res.ok) setEnviado((await res.json()).message);
+      else setError(await leerMensajeError(res, 'No se pudo enviar el mail.'));
+    } catch {
+      setError('No se pudo conectar con el servidor.');
+    }
+    setEnviando(false);
   };
 
   const inputStyle = {
@@ -36,7 +50,7 @@ function RecuperarPassword() {
         justifyContent: 'center' 
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
-          <span style={{ color: '#D4AF37', fontSize: '1.5rem', fontWeight: 'bold' }}>(o)</span>
+          <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
         </div>
         <h1 style={{ fontSize: '3.2rem', color: '#1a1a1a', lineHeight: '1.15', margin: '0 0 15px 0' }}>
@@ -65,7 +79,7 @@ function RecuperarPassword() {
           
           {enviado ? (
             <div style={{ background: '#e6ffe6', padding: '15px', borderRadius: '8px', color: '#006600', marginBottom: '20px', border: '1px solid #b3ffb3' }}>
-              ¡Correo enviado con éxito! Revisá tu bandeja de entrada.
+              {enviado} El link vence en 1 hora.
             </div>
           ) : (
             <form onSubmit={handleRecuperar} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -81,9 +95,12 @@ function RecuperarPassword() {
                 />
               </div>
 
-              <button 
-                type="submit" 
-                style={{ 
+              {error && <p style={{ color: 'red', margin: 0, fontSize: '0.9rem' }}>{error}</p>}
+
+              <button
+                type="submit"
+                disabled={enviando}
+                style={{
                   padding: '14px', 
                   backgroundColor: '#F4D06F', 
                   color: '#1a1a1a',
@@ -95,7 +112,7 @@ function RecuperarPassword() {
                   marginTop: '10px'
                 }}
               >
-                Enviar enlace
+                {enviando ? 'Enviando...' : 'Enviar enlace'}
               </button>
             </form>
           )}

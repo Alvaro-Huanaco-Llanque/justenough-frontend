@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BarraLateral from '../components/BarraLateral';
+import { MensajeVacio } from '../components/Marca';
+import { BotonAlertas } from '../components/Alertas';
 import { apiFetch, leerMensajeError } from '../api';
 import { unidadCorta, etiquetaModalidad, formatearPrecio, formatearCantidad, formatearFechaLarga, hoyISO } from '../utils/productos';
 
@@ -123,9 +125,7 @@ function ProducidoCompras() {
             <h1 style={{ fontSize: '2.2rem', color: textDark, margin: '0 0 5px 0', fontWeight: 'bold' }}>Producido / Compras</h1>
             <p style={{ color: textGray, margin: 0, fontSize: '1rem' }}>{formatearFechaLarga(hoyISO())}</p>
           </div>
-          <button style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: bgCard, border: `1px solid ${borderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.2rem', color: textGray }}>
-            🔔
-          </button>
+          <BotonAlertas />
         </div>
 
         {/* Título interno y Selector de Fecha */}
@@ -180,8 +180,10 @@ function ProducidoCompras() {
               )}
               {!cargando && productos.length === 0 && (
                 <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: textGray }}>
-                  No hay productos activos en el catálogo.{' '}
-                  <span onClick={() => navigate('/catalogo')} style={{ color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Agregalos en Catálogo →</span>
+                  <MensajeVacio>
+                    No hay productos activos en el catálogo.{' '}
+                    <span onClick={() => navigate('/catalogo')} style={{ color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Agregalos en Catálogo →</span>
+                  </MensajeVacio>
                 </td></tr>
               )}
               {!cargando && productosPaginados.map((prod, index) => {

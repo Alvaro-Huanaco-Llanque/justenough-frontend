@@ -23,6 +23,11 @@ export function obtenerUsuario() {
   }
 }
 
+// Después de editar la cuenta en Configuración, para que la barra lateral muestre los datos nuevos
+export function actualizarUsuarioGuardado(usuario) {
+  localStorage.setItem(USUARIO_KEY, JSON.stringify(usuario));
+}
+
 export function haySesion() {
   return Boolean(obtenerToken());
 }
