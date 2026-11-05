@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiFetch, leerMensajeError } from '../api';
+import { apiFetch, leerMensajeError, EVENTO_DATOS_CAMBIARON, MENSAJE_SIN_CONEXION } from '../api';
 import { formatearMomento } from '../utils/productos';
 
 const bgCard = '#FFFFFF';
@@ -28,6 +28,7 @@ export function BotonAlertas({ abierto: abiertoExterno, alCambiar }) {
       <button
         onClick={() => setAbierto(true)}
         title="Alertas"
+        aria-label={`Alertas${sinLeer > 0 ? `: ${sinLeer} sin leer` : ''}`}
         style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '50%', backgroundColor: bgCard, border: `1px solid ${borderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '1.2rem', color: textGray, flexShrink: 0 }}
       >
         🔔
@@ -48,9 +49,15 @@ function PanelAlertas({ abierto, alCerrar, alCambiarSinLeer }) {
   const [filtro, setFiltro] = useState('TODAS');
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);   // cambiarla vuelve a pedir las alertas
-  const recargar = () => setVersion(v => v + 1);
 
-  // Se cargan al entrar a la pantalla, cada vez que se abre el panel y después de marcarlas como leídas
+  // Cualquier carga puede generar o resolver alertas
+  useEffect(() => {
+    const recargar = () => setVersion(v => v + 1);
+    window.addEventListener(EVENTO_DATOS_CAMBIARON, recargar);
+    return () => window.removeEventListener(EVENTO_DATOS_CAMBIARON, recargar);
+  }, []);
+
+  // Se cargan al entrar a la pantalla, cada vez que se abre el panel y cuando cambian los datos
   useEffect(() => {
     let vigente = true;
     const cargar = async () => {
@@ -59,6 +66,7 @@ function PanelAlertas({ abierto, alCerrar, alCambiarSinLeer }) {
         if (!vigente) return;
         if (res.ok) {
           const data = await res.json();
+          if (!vigente) return;
           setAlertas(data);
           alCambiarSinLeer(data.filter(a => !a.leida).length);
           setError('');
@@ -66,7 +74,7 @@ function PanelAlertas({ abierto, alCerrar, alCambiarSinLeer }) {
           setError(await leerMensajeError(res, 'No se pudieron cargar las alertas.'));
         }
       } catch {
-        if (vigente) setError('No se pudo conectar con el servidor.');
+        if (vigente) setError(MENSAJE_SIN_CONEXION);
       }
     };
     cargar();
@@ -74,38 +82,46 @@ function PanelAlertas({ abierto, alCerrar, alCambiarSinLeer }) {
   }, [abierto, version, alCambiarSinLeer]);
 
   const marcarTodas = async () => {
-    const res = await apiFetch('/api/alertas/leer-todas', { method: 'PUT' });
-    if (res.ok) recargar();
+    try {
+      const res = await apiFetch('/api/alertas/leer-todas', { method: 'PUT' });
+      if (!res.ok) setError(await leerMensajeError(res, 'No se pudieron marcar las alertas.'));
+    } catch {
+      setError(MENSAJE_SIN_CONEXION);
+    }
   };
 
   const marcarLeida = async (alerta) => {
     if (alerta.leida) return;
-    const res = await apiFetch(`/api/alertas/${alerta.id}/leida`, { method: 'PUT' });
-    if (res.ok) recargar();
+    try {
+      const res = await apiFetch(`/api/alertas/${alerta.id}/leida`, { method: 'PUT' });
+      if (!res.ok) setError(await leerMensajeError(res, 'No se pudo marcar la alerta.'));
+    } catch {
+      setError(MENSAJE_SIN_CONEXION);
+    }
   };
 
   if (!abierto) return null;
 
   const visibles = alertas.filter(a => filtro === 'TODAS' || a.tipo === filtro);
   const chip = (valor, texto) => (
-    <div key={valor} onClick={() => setFiltro(valor)} style={{ padding: '6px 14px', backgroundColor: filtro === valor ? '#F4D06F' : bgCard, border: filtro === valor ? '1px solid transparent' : `1px solid ${borderLight}`, color: filtro === valor ? textDark : textGray, borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer' }}>
+    <button key={valor} onClick={() => setFiltro(valor)} style={{ padding: '6px 14px', backgroundColor: filtro === valor ? '#F4D06F' : bgCard, border: filtro === valor ? '1px solid transparent' : `1px solid ${borderLight}`, color: filtro === valor ? textDark : textGray, borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit' }}>
       {texto}
-    </div>
+    </button>
   );
 
   return (
     <>
-      <div onClick={alCerrar} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.15)', zIndex: 999 }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, width: '380px', maxWidth: '100vw', height: '100vh', backgroundColor: bgCard, boxShadow: '-4px 0 20px rgba(0,0,0,0.08)', zIndex: 1000, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+      <div onClick={alCerrar} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.15)', zIndex: 2600 }} />
+      <div role="dialog" aria-label="Alertas" style={{ position: 'fixed', top: 0, right: 0, width: '380px', maxWidth: '100vw', height: '100%', backgroundColor: bgCard, boxShadow: '-4px 0 20px rgba(0,0,0,0.08)', zIndex: 2700, display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
         <div style={{ padding: '30px 25px 20px 25px', borderBottom: `1px solid ${borderLight}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h2 style={{ fontSize: '1.6rem', color: textDark, margin: 0 }}>Alertas</h2>
-            <span onClick={alCerrar} style={{ fontSize: '1.5rem', cursor: 'pointer', color: textGray }}>×</span>
+            <button onClick={alCerrar} aria-label="Cerrar alertas" style={{ fontSize: '1.5rem', cursor: 'pointer', color: textGray, background: 'none', border: 'none' }}>×</button>
           </div>
           {alertas.some(a => !a.leida) && (
-            <span onClick={marcarTodas} style={{ color: '#B89732', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer' }}>
+            <button onClick={marcarTodas} style={{ padding: 0, background: 'none', border: 'none', color: '#B89732', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit' }}>
               Marcar todas como leídas
-            </span>
+            </button>
           )}
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
             {chip('TODAS', 'Todas')}
@@ -114,7 +130,7 @@ function PanelAlertas({ abierto, alCerrar, alCambiarSinLeer }) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {error && <p style={{ color: '#C5221F', fontSize: '0.9rem', margin: 0 }}>{error}</p>}
+          {error && <p role="alert" style={{ color: '#C5221F', fontSize: '0.9rem', margin: 0 }}>{error}</p>}
           {!error && visibles.length === 0 && (
             <p style={{ color: textGray, fontSize: '0.9rem', margin: 0, textAlign: 'center' }}>No hay alertas{filtro !== 'TODAS' ? ' de este tipo' : ''}.</p>
           )}

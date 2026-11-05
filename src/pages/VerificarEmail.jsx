@@ -15,6 +15,10 @@ function VerificarEmail() {
   const [avisoReenvio, setAvisoReenvio] = useState('');
   // En desarrollo React ejecuta los efectos dos veces: sin esto, la segunda llamada vería el token ya usado
   const yaPedido = useRef(false);
+  const temporizador = useRef(null);
+
+  // Si el usuario se va antes de los 1,5 segundos, no se lo redirige después
+  useEffect(() => () => clearTimeout(temporizador.current), []);
 
   useEffect(() => {
     if (!token || yaPedido.current) return;
@@ -29,7 +33,7 @@ function VerificarEmail() {
         if (res.ok) {
           guardarSesion(await res.json());
           setEstado('ok');
-          setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+          temporizador.current = setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
         } else {
           setMensaje(await leerMensajeError(res, 'No se pudo verificar el email.'));
           setEstado('error');
@@ -84,10 +88,10 @@ function VerificarEmail() {
   const titulos = { verificando: 'Verificando tu email...', ok: '¡Email verificado!', error: 'No pudimos verificar tu email' };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+    <div className="auth-raiz">
 
       {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
-      <div style={{ flex: 1, backgroundColor: '#F7F4EB', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div className="auth-marca">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
           <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
@@ -100,7 +104,7 @@ function VerificarEmail() {
       </div>
 
       {/* Lado Derecho - Resultado de la verificación */}
-      <div style={{ flex: 1, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+      <div className="auth-form">
         <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
           <div style={{ width: '60px', height: '60px', backgroundColor: '#FDF8EC', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem' }}>
             {iconos[estado]}

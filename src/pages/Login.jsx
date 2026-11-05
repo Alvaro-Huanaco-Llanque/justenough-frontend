@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Marca';
-import { apiFetch, guardarSesion, leerMensajeError } from '../api';
+import { apiFetch, guardarSesion, leerMensajeError, MENSAJE_SIN_CONEXION } from '../api';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -34,7 +34,7 @@ function Login() {
         setError(await leerMensajeError(res, 'Email o contraseña incorrectos.'));
       }
     } catch {
-      setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+      setError(MENSAJE_SIN_CONEXION);
     }
     setCargando(false);
   };
@@ -47,7 +47,7 @@ function Login() {
       });
       setAvisoReenvio(res.ok ? 'Te enviamos un nuevo mail de verificación.' : await leerMensajeError(res, 'No se pudo reenviar el mail.'));
     } catch {
-      setAvisoReenvio('No se pudo conectar con el servidor.');
+      setAvisoReenvio(MENSAJE_SIN_CONEXION);
     }
   };
 
@@ -64,17 +64,10 @@ function Login() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
-      
+    <div className="auth-raiz">
+
       {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#F7F4EB', 
-        padding: '60px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center' 
-      }}>
+      <div className="auth-marca">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
           <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
@@ -91,22 +84,16 @@ function Login() {
       </div>
 
       {/* Lado Derecho - Formulario de Login */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#FFFFFF', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        alignItems: 'center' 
-      }}>
+      <div className="auth-form">
         <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '30px', color: '#1a1a1a', marginTop: '0' }}>Bienvenida de nuevo</h2>
+          <h2 style={{ fontSize: '2rem', marginBottom: '30px', color: '#1a1a1a', marginTop: '0' }}>Hola de nuevo</h2>
           
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Email</label>
-              <input 
-                type="email" 
+              <label htmlFor="login-email" style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Email</label>
+              <input
+                id="login-email"
+                type="email"
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 required 
@@ -116,9 +103,10 @@ function Login() {
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Contraseña</label>
-              <input 
-                type="password" 
+              <label htmlFor="login-password" style={{ display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' }}>Contraseña</label>
+              <input
+                id="login-password"
+                type="password"
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 required 

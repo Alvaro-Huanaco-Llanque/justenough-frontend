@@ -34,8 +34,8 @@ function RestablecerPassword() {
   const labelStyle = { display: 'block', marginBottom: '6px', color: '#444444', fontSize: '0.9rem', fontWeight: '500' };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ flex: 1, backgroundColor: '#F7F4EB', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+    <div className="auth-raiz">
+      <div className="auth-marca">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
           <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
@@ -45,7 +45,7 @@ function RestablecerPassword() {
         <p style={{ color: '#666666', fontSize: '1.1rem', lineHeight: '1.5', maxWidth: '420px' }}>Elegí una contraseña nueva para tu cuenta.</p>
       </div>
 
-      <div style={{ flex: 1, backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+      <div className="auth-form">
         <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0' }}>
           <h2 style={{ fontSize: '2rem', marginBottom: '30px', color: '#1a1a1a', marginTop: '0' }}>Nueva contraseña</h2>
 

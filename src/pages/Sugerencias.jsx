@@ -1,32 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import BarraLateral from '../components/BarraLateral';
+import Pantalla, { Aviso } from '../components/Pantalla';
 import { MensajeVacio } from '../components/Marca';
 import { BotonAlertas } from '../components/Alertas';
-import { apiFetch, leerMensajeError } from '../api';
-import { MOTIVOS_AJUSTE, hoyISO, unidadCorta } from '../utils/productos';
+import { apiFetch, leerMensajeError, MENSAJE_SIN_CONEXION } from '../api';
+import { useHoy } from '../utils/hooks';
+import {
+  formatearCantidad, formatearFechaLarga, fechaCorta, lunesDe, sumarDias, resumirPorUnidad, unidadCorta,
+  etiquetaConfianza, colorConfianza
+} from '../utils/productos';
 
 const DIAS_KEYS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
-const DIAS_NOMBRES = {
-  lun: 'Lunes', mar: 'Martes', mie: 'Miércoles',
-  jue: 'Jueves', vie: 'Viernes', sab: 'Sábado', dom: 'Domingo'
-};
+const DIAS_CORTOS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
-function obtenerLunesActual() {
-  const hoy = new Date();
-  const dia = hoy.getDay(); // 0 = dom, 1 = lun...
-  const diff = hoy.getDate() - dia + (dia === 0 ? -6 : 1);
-  const lunes = new Date(hoy.setDate(diff));
-  return lunes.toLocaleDateString('en-CA'); // YYYY-MM-DD
-}
+const bgCard = '#FFFFFF';
+const borderLight = '#EAE6DF';
+const textDark = '#1A1A1A';
+const textGray = '#666666';
+const textApagado = '#8A8A8A';
+const goldPrimary = '#D4AF37';
+const goldLight = '#F9EBBF';
 
-function formatearConfianza(nivelEnum) {
-  if (!nivelEnum) return 'Baja';
-  const up = nivelEnum.toUpperCase();
-  if (up === 'ALTA') return 'Alta';
-  if (up === 'MEDIA') return 'Media';
-  return 'Baja';
-}
+const ventaEsperada = (s) => s.demandaEsperada ?? s.cantidadSugerida;
+
+// El dorado se intensifica según cuánto se espera vender ese día comparado con el resto de la semana del producto
+const fondoCalor = (intensidad) => `rgba(212, 175, 55, ${0.1 + intensidad * 0.5})`;
 
 // Agrupa las filas individuales de la BD (1 por día) en una fila semanal por producto
 function agruparPorProducto(listaSugerencias, lunesSemana) {
@@ -37,68 +35,61 @@ function agruparPorProducto(listaSugerencias, lunesSemana) {
     if (!s.producto) return;
     const pId = s.producto.id;
     if (!mapa[pId]) {
-      mapa[pId] = {
-        id: pId,
-        nombre: s.producto.nombre,
-        unidadMedida: s.producto.unidadMedida || 'UNIDAD',
-        confianza: formatearConfianza(s.nivelConfianza),
-        dias: {}, // { lun: { sugerenciaId, sugerida, final, estado, fecha }, ... }
-        aceptadaCompleta: true
-      };
+      mapa[pId] = { id: pId, nombre: s.producto.nombre, unidadMedida: s.producto.unidadMedida, nivelConfianza: s.nivelConfianza, dias: {} };
     }
-
     const fechaSug = new Date(s.fecha + 'T00:00:00');
     const diffDias = Math.round((fechaSug - baseLunes) / (1000 * 60 * 60 * 24));
     if (diffDias >= 0 && diffDias < 7) {
-      const key = DIAS_KEYS[diffDias];
-      mapa[pId].dias[key] = {
-        sugerenciaId: s.id,
-        sugerida: s.cantidadSugerida,
-        final: s.cantidadFinal,
-        estado: s.estado,
-        fecha: s.fecha
-      };
-      if (s.estado === 'PENDIENTE') {
-        mapa[pId].aceptadaCompleta = false;
-      }
+      mapa[pId].dias[DIAS_KEYS[diffDias]] = s;
+      // La confianza que vale es la del cálculo más reciente: la del último día de la semana
+      mapa[pId].nivelConfianza = s.nivelConfianza;
     }
   });
 
   return Object.values(mapa).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
+const valoresDe = (prod) => DIAS_KEYS.filter(d => prod.dias[d]).map(d => ventaEsperada(prod.dias[d]));
+
+// El día con más venta esperada. Los productos pueden medirse en kilos o unidades, así que no se suman:
+// se compara cada día con el promedio de su producto, y después se promedia entre productos.
+function diaMasFuerte(filas) {
+  const acumulado = DIAS_KEYS.map(() => ({ suma: 0, productos: 0 }));
+  filas.forEach((prod) => {
+    const valores = valoresDe(prod);
+    const promedio = valores.reduce((a, b) => a + b, 0) / (valores.length || 1);
+    if (promedio <= 0) return;
+    DIAS_KEYS.forEach((d, i) => {
+      if (!prod.dias[d]) return;
+      acumulado[i].suma += ventaEsperada(prod.dias[d]) / promedio;
+      acumulado[i].productos += 1;
+    });
+  });
+  let mejor = null;
+  acumulado.forEach((a, i) => {
+    if (a.productos === 0) return;
+    const indice = a.suma / a.productos;
+    if (!mejor || indice > mejor.indice) mejor = { posicion: i, indice };
+  });
+  return mejor;
+}
+
+// Sugerencias: la venta esperada de cada día de la semana. Es una referencia para mirar, no hay nada que aceptar.
 function Sugerencias() {
   const navigate = useNavigate();
+  const hoy = useHoy();
 
-  const [lunesSemana] = useState(obtenerLunesActual);
+  const [semanaElegida, setSemanaElegida] = useState(null);   // null = la semana actual, y avanza sola
+  const lunesActual = lunesDe(hoy);
+  const lunesSemana = semanaElegida ?? lunesActual;
+  const esSemanaActual = lunesSemana === lunesActual;
+
   const [filasProductos, setFilasProductos] = useState([]);
+  const [estadoCalculo, setEstadoCalculo] = useState({ basico: false, desactualizada: false });
   const [cargando, setCargando] = useState(true);
-  const [procesando, setProcesando] = useState(false);
-  const [aviso, setAviso] = useState(null);
-  const [version, setVersion] = useState(0);   // cambiarla vuelve a pedir la semana
-  const recargar = () => setVersion(v => v + 1);
+  const [errorCarga, setErrorCarga] = useState('');
 
-  // Estado del Modal de Ajuste
-  const [modal, setModal] = useState({
-    abierto: false,
-    producto: null,
-    diaKey: 'sab',
-    sugerenciaId: null,
-    fechaDia: '',
-    cantidadOriginal: '',
-    nuevaCantidad: '',
-    motivo: 'EVENTO',
-    comentario: ''
-  });
-  const hoy = hoyISO();
-
-  const mostrarAviso = (tipo, texto) => {
-    setAviso({ tipo, texto });
-    setTimeout(() => setAviso(null), 4000);
-  };
-
-  // Sugerencias de la semana. El backend calcula las que falten y recalcula solo con la IA
-  // cuando hay cargas nuevas (ventas, producción, desechos o eventos), así que no hace falta un botón.
+  // El backend las recalcula solo en segundo plano cuando cambian días pasados o eventos, y cada noche
   useEffect(() => {
     let vigente = true;
     const cargar = async () => {
@@ -106,123 +97,29 @@ function Sugerencias() {
         const res = await apiFetch(`/api/sugerencias/semana?desde=${lunesSemana}`);
         if (!vigente) return;
         if (res.ok) {
-          setFilasProductos(agruparPorProducto((await res.json()).sugerencias, lunesSemana));
+          const data = await res.json();
+          if (!vigente) return;
+          setErrorCarga('');
+          setFilasProductos(agruparPorProducto(data.sugerencias, lunesSemana));
+          setEstadoCalculo({
+            basico: data.sugerencias.some(s => s.fecha >= hoy && s.origen === 'LOCAL'),
+            desactualizada: data.desactualizada
+          });
         } else {
-          setAviso({ tipo: 'error', texto: await leerMensajeError(res, 'No se pudieron obtener las sugerencias.') });
+          setErrorCarga(await leerMensajeError(res, 'No se pudieron obtener las sugerencias.'));
         }
       } catch {
-        if (vigente) setAviso({ tipo: 'error', texto: 'Error de conexión con el servidor.' });
+        if (vigente) setErrorCarga(MENSAJE_SIN_CONEXION);
       }
       if (vigente) setCargando(false);
     };
     cargar();
     return () => { vigente = false; };
-  }, [lunesSemana, version]);
+  }, [lunesSemana, hoy]);
 
-  // Solo se pueden ajustar los días de hoy en adelante
-  const esEditable = (infoDia) => Boolean(infoDia) && infoDia.fecha >= hoy;
-
-  const abrirModalAjuste = (prod, diaInicial) => {
-    const clave = esEditable(prod.dias[diaInicial]) ? diaInicial : DIAS_KEYS.find(d => esEditable(prod.dias[d]));
-    const infoDia = clave && prod.dias[clave];
-    if (!infoDia) { mostrarAviso('error', 'No quedan días de esta semana para ajustar.'); return; }
-
-    setModal({
-      abierto: true,
-      producto: prod,
-      diaKey: clave,
-      sugerenciaId: infoDia.sugerenciaId,
-      fechaDia: infoDia.fecha,
-      cantidadOriginal: `${infoDia.sugerida} ${unidadCorta(prod.unidadMedida)}`,
-      nuevaCantidad: String(infoDia.final),
-      motivo: 'EVENTO',
-      comentario: ''
-    });
-  };
-
-  const cambiarDiaEnModal = (nuevoDiaKey) => {
-    const infoDia = modal.producto?.dias[nuevoDiaKey];
-    if (!esEditable(infoDia)) return;
-    setModal({
-      ...modal,
-      diaKey: nuevoDiaKey,
-      sugerenciaId: infoDia.sugerenciaId,
-      fechaDia: infoDia.fecha,
-      cantidadOriginal: `${infoDia.sugerida} ${unidadCorta(modal.producto.unidadMedida)}`,
-      nuevaCantidad: String(infoDia.final)
-    });
-  };
-
-  const cerrarModal = () => setModal({ ...modal, abierto: false });
-
-  const guardarAjuste = async () => {
-    const num = parseFloat(modal.nuevaCantidad);
-    if (isNaN(num) || num < 0) {
-      alert('Ingresá una cantidad válida.');
-      return;
-    }
-
-    try {
-      const res = await apiFetch(`/api/sugerencias/${modal.sugerenciaId}/ajustar`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nuevaCantidad: num,
-          motivo: modal.motivo,
-          comentario: modal.comentario
-        })
-      });
-
-      if (res.ok) {
-        mostrarAviso('ok', `Ajuste guardado para ${modal.producto.nombre} (${DIAS_NOMBRES[modal.diaKey]}).`);
-        cerrarModal();
-        recargar();
-      } else {
-        alert(await leerMensajeError(res, 'No se pudo guardar el ajuste.'));
-      }
-    } catch {
-      alert('Error al conectar con el servidor.');
-    }
-  };
-
-  const aceptarFilaProducto = async (productoId, nombre) => {
-    try {
-      const res = await apiFetch(`/api/sugerencias/producto/${productoId}/aceptar?desde=${lunesSemana}`, {
-        method: 'PUT'
-      });
-      if (res.ok) {
-        mostrarAviso('ok', `Plan semanal de ${nombre} aceptado.`);
-        recargar();
-      } else {
-        mostrarAviso('error', await leerMensajeError(res, 'No se pudo aceptar la sugerencia.'));
-      }
-    } catch {
-      mostrarAviso('error', 'No se pudo aceptar la sugerencia.');
-    }
-  };
-
-  const aceptarTodas = async () => {
-    setProcesando(true);
-    try {
-      const res = await apiFetch(`/api/sugerencias/aceptar-todas?desde=${lunesSemana}`, {
-        method: 'PUT'
-      });
-      if (res.ok) {
-        mostrarAviso('ok', '¡Todas las sugerencias de la semana fueron aceptadas!');
-        recargar();
-      } else {
-        mostrarAviso('error', await leerMensajeError(res, 'No se pudieron aceptar las sugerencias.'));
-      }
-    } catch {
-      mostrarAviso('error', 'No se pudieron aceptar las sugerencias.');
-    }
-    setProcesando(false);
-  };
-
-  const getBadgeColor = (confianza) => {
-    if (confianza === 'Alta') return { bg: '#E6F4EA', color: '#137333' };
-    if (confianza === 'Media') return { bg: '#FEF7E0', color: '#B06000' };
-    return { bg: '#FCE8E6', color: '#C5221F' };
+  const irASemana = (lunes) => {
+    setCargando(true);
+    setSemanaElegida(lunes === lunesActual ? null : lunes);
   };
 
   // Formateo del rango de fechas de la semana para el título
@@ -232,145 +129,161 @@ function Sugerencias() {
   const opcionesCortas = { day: 'numeric', month: 'short' };
   const rangoTexto = `${fechaLunesObj.toLocaleDateString('es-AR', opcionesCortas)} – ${fechaDomingoObj.toLocaleDateString('es-AR', opcionesCortas)}`;
 
-  const bgApp = '#FAF9F6';
-  const bgCard = '#FFFFFF';
-  const borderLight = '#EAE6DF';
-  const textDark = '#1A1A1A';
-  const textGray = '#666666';
-  const goldPrimary = '#D4AF37';
-  const goldLight = '#F9EBBF';
+  const fechasSemana = DIAS_KEYS.map((_, i) => sumarDias(lunesSemana, i));
+
+  // ================= Resumen de arriba =================
+  const hayDatos = !cargando && filasProductos.length > 0;
+  const aResumir = filasProductos.flatMap(prod => DIAS_KEYS
+    .filter(d => prod.dias[d] && (!esSemanaActual || prod.dias[d].fecha === hoy))
+    .map(d => ({ cantidad: ventaEsperada(prod.dias[d]), unidadMedida: prod.unidadMedida })));
+  const masFuerte = hayDatos ? diaMasFuerte(filasProductos) : null;
+  const sobrePromedio = masFuerte ? Math.round((masFuerte.indice - 1) * 100) : 0;
+  const confiables = filasProductos.filter(p => p.nivelConfianza !== 'BAJA').length;
+
+  const tarjeta = (titulo, icono, iconoBg, valor, pie) => (
+    <div style={{ backgroundColor: bgCard, padding: '22px 25px', borderRadius: '16px', border: `1px solid ${borderLight}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
+        <span style={{ fontSize: '0.9rem', color: textGray, fontWeight: '500' }}>{titulo}</span>
+        <div aria-hidden="true" style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: iconoBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', flexShrink: 0 }}>{icono}</div>
+      </div>
+      <span style={{ fontSize: '1.6rem', fontWeight: 'bold', color: textDark, display: 'block' }}>{valor}</span>
+      <span style={{ fontSize: '0.85rem', color: textGray, display: 'block', marginTop: '6px', fontWeight: '500' }}>{pie}</span>
+    </div>
+  );
+
+  const botonSemana = { padding: '8px 14px', backgroundColor: bgCard, color: textDark, border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit' };
+  const thDia = { padding: '16px 2px 12px', fontWeight: 'bold', minWidth: '50px' };
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: '"Inter", "Segoe UI", Arial, sans-serif', backgroundColor: bgApp, boxSizing: 'border-box', overflow: 'hidden', position: 'relative' }}>
-      
-      <BarraLateral seccionActiva="sugerencias" />
-
-      {/* ================= CONTENIDO PRINCIPAL ================= */}
-      <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '40px 50px', boxSizing: 'border-box' }}>
-        
-        {/* Cabecera */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
-          <div>
-            <h1 style={{ fontSize: '2.2rem', color: textDark, margin: '0 0 5px 0', fontWeight: 'bold' }}>Sugerencias</h1>
-            <p style={{ color: textGray, margin: 0, fontSize: '1rem', textTransform: 'capitalize' }}>
-              {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
-          <BotonAlertas />
+    <Pantalla seccion="sugerencias">
+      <div className="fila-cabecera" style={{ marginBottom: '30px' }}>
+        <div>
+          <h1 style={{ fontSize: '2.2rem', margin: '0 0 5px 0' }}>Sugerencias</h1>
+          <p style={{ color: textGray, fontSize: '1rem' }}>{formatearFechaLarga(hoy)}</p>
         </div>
+        <BotonAlertas />
+      </div>
 
-        {/* Título de la Semana y Botones */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div>
-            <h2 style={{ fontSize: '1.6rem', color: textDark, margin: '0 0 5px 0' }}>Sugerencia semanal · {rangoTexto}</h2>
-            <p style={{ color: textGray, margin: 0, fontSize: '0.95rem' }}>Revisá y aceptá el plan sugerido por el modelo predictivo.</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-              🍪
-            </div>
-            <button
-              onClick={aceptarTodas}
-              disabled={procesando || filasProductos.length === 0}
-              style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' }}
-            >
-              Aceptar todas
-            </button>
+      {estadoCalculo.basico && (
+        <div role="status" style={{ backgroundColor: '#FEF7E0', border: '1px solid #E8C877', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', color: '#665324', fontSize: '0.92rem' }}>
+          <strong>Cálculo básico.</strong> El motor de predicciones no está disponible: estas cantidades usan solo el promedio de tus ventas. Se actualizan solas cuando vuelva.
+        </div>
+      )}
+      {estadoCalculo.desactualizada && (
+        <div role="status" style={{ backgroundColor: '#E8F0FE', border: '1px solid #AFC6EF', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', color: '#1A3F7A', fontSize: '0.92rem' }}>
+          Cambiaron datos de días pasados o del calendario: estamos actualizando las sugerencias.
+        </div>
+      )}
+      <Aviso aviso={errorCarga ? { tipo: 'error', texto: errorCarga } : null} />
+
+      {/* Resumen */}
+      <div className="grilla-3" style={{ marginBottom: '30px' }}>
+        {tarjeta(esSemanaActual ? 'Se espera vender hoy' : 'Se espera vender en la semana', '🧾', '#FDF8EC',
+          hayDatos ? resumirPorUnidad(aResumir) : '—',
+          hayDatos ? `Sumando ${filasProductos.length} ${filasProductos.length === 1 ? 'producto' : 'productos'}` : 'Sin sugerencias para mostrar')}
+        {tarjeta('Día más fuerte', '📈', '#E6F4EA',
+          masFuerte ? formatearFechaLarga(fechasSemana[masFuerte.posicion]).split(',')[0] : '—',
+          !masFuerte ? 'Sin sugerencias para mostrar'
+            : sobrePromedio > 0 ? `${fechaCorta(fechasSemana[masFuerte.posicion])} · +${sobrePromedio}% sobre un día promedio`
+            : 'Venta pareja toda la semana')}
+        {tarjeta('Confianza', '🎯', '#FEF7E0',
+          hayDatos ? `${confiables} de ${filasProductos.length}` : '—',
+          'Productos con confianza Media o Alta')}
+      </div>
+
+      {/* Título y cambio de semana */}
+      <div className="fila-cabecera" style={{ alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: '1 1 320px' }}>
+          <div aria-hidden="true" style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>🍪</div>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: '1.5rem', margin: '0 0 3px 0' }}>Sugerencia semanal · {rangoTexto}</h2>
+            <p style={{ color: textGray, fontSize: '0.92rem' }}>Cuánto se espera vender cada día, según tus ventas, desechos y calendario. Es una referencia: no hay nada que aceptar.</p>
           </div>
         </div>
+        <div style={{ display: 'inline-flex', border: `1px solid ${borderLight}`, borderRadius: '10px', overflow: 'hidden', backgroundColor: bgCard }}>
+          <button onClick={() => irASemana(sumarDias(lunesSemana, -7))} style={botonSemana} aria-label="Semana anterior">←</button>
+          <button onClick={() => irASemana(lunesActual)} disabled={esSemanaActual} aria-current={esSemanaActual ? 'date' : undefined}
+            style={{ ...botonSemana, borderLeft: `1px solid ${borderLight}`, borderRight: `1px solid ${borderLight}`, backgroundColor: esSemanaActual ? '#FDF8EC' : bgCard, color: esSemanaActual ? '#8A6D1C' : textDark, cursor: esSemanaActual ? 'default' : 'pointer' }}>
+            Esta semana
+          </button>
+          <button onClick={() => irASemana(sumarDias(lunesSemana, 7))} style={botonSemana} aria-label="Semana siguiente">→</button>
+        </div>
+      </div>
 
-        {aviso && (
-          <div style={{ padding: '12px 18px', borderRadius: '10px', marginBottom: '20px', fontSize: '0.92rem', backgroundColor: aviso.tipo === 'ok' ? '#E6F4EA' : '#FCE8E6', color: aviso.tipo === 'ok' ? '#137333' : '#C5221F' }}>
-            {aviso.texto}
-          </div>
-        )}
-
-        {/* Tabla de Sugerencias */}
-        <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, padding: '0', marginBottom: '30px', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+      {/* Tabla semanal */}
+      <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, marginBottom: '30px', overflow: 'hidden' }}>
+        <div className="tabla-contenedor">
+          <table aria-busy={cargando} style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', minWidth: '640px' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${borderLight}`, color: '#A0A0A0', fontSize: '0.75rem', letterSpacing: '0.5px' }}>
-                <th style={{ padding: '20px', fontWeight: 'bold', textAlign: 'left' }}>PRODUCTO</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>LUN</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>MAR</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>MIÉ</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>JUE</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>VIE</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>SÁB</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>DOM</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>CONFIANZA</th>
-                <th style={{ padding: '20px', fontWeight: 'bold' }}>ACCIONES</th>
+                <th scope="col" className="sug-col-producto" style={{ padding: '16px 12px 12px 16px', fontWeight: 'bold', textAlign: 'left' }}>PRODUCTO</th>
+                {fechasSemana.map((fecha, i) => {
+                  const esHoy = fecha === hoy;
+                  return (
+                    <th key={fecha} scope="col" className={esHoy ? 'sug-hoy' : undefined} aria-label={esHoy ? `${DIAS_CORTOS[i]}, hoy` : undefined} style={{ ...thDia, color: esHoy ? '#8A6D1C' : '#A0A0A0' }}>
+                      <span style={{ display: 'block', marginBottom: '4px' }}>{DIAS_CORTOS[i]}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', borderRadius: '50%', fontSize: '0.8rem', backgroundColor: esHoy ? goldPrimary : 'transparent', color: esHoy ? '#FFFFFF' : textGray }}>{Number(fecha.slice(8))}</span>
+                    </th>
+                  );
+                })}
+                <th scope="col" style={{ padding: '16px 8px 12px', fontWeight: 'bold', borderLeft: `1px solid ${borderLight}` }}>SEMANA</th>
+                <th scope="col" style={{ padding: '16px 12px 12px 6px', fontWeight: 'bold' }}>CONFIANZA</th>
               </tr>
             </thead>
             <tbody>
               {cargando ? (
-                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}>Calculando predicciones...</td></tr>
-              ) : filasProductos.length === 0 ? (
-                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}><MensajeVacio>No hay productos de stock activos en el catálogo para predecir.</MensajeVacio></td></tr>
+                [0, 1, 2, 3].map(i => (
+                  <tr key={i} style={{ borderBottom: i === 3 ? 'none' : `1px solid ${borderLight}` }}>
+                    <td colSpan="10" style={{ padding: '16px 20px' }}><div className="sug-esqueleto" /></td>
+                  </tr>
+                ))
+              ) : errorCarga ? null : filasProductos.length === 0 ? (
+                <tr><td colSpan="10" style={{ padding: '40px', color: textGray }}><MensajeVacio>No hay sugerencias para esta semana. Solo se calculan para productos activos con stock.</MensajeVacio></td></tr>
               ) : (
                 filasProductos.map((prod, index) => {
-                  const badge = getBadgeColor(prod.confianza);
+                  const badge = colorConfianza(prod.nivelConfianza);
+                  // El color solo compara lo que todavía no pasó: los días pasados quedan apagados
+                  const valores = DIAS_KEYS
+                    .filter(d => prod.dias[d] && prod.dias[d].fecha >= hoy)
+                    .map(d => ventaEsperada(prod.dias[d]))
+                    .filter(v => v > 0);
+                  const maximo = Math.max(0, ...valores);
+                  const minimo = Math.min(maximo, ...valores);
+                  const totalSemana = valoresDe(prod).reduce((a, b) => a + b, 0);
                   return (
-                    <tr key={prod.id} style={{ borderBottom: index === filasProductos.length - 1 ? 'none' : `1px solid ${borderLight}` }}>
-                      <td style={{ padding: '15px 20px', fontWeight: '600', color: textDark, fontSize: '0.95rem', textAlign: 'left' }}>
-                        {prod.nombre}
+                    <tr key={prod.id} className="sug-fila" style={{ borderBottom: index === filasProductos.length - 1 ? 'none' : `1px solid ${borderLight}` }}>
+                      <td className="sug-col-producto" style={{ padding: '12px 12px 12px 16px', textAlign: 'left' }}>
+                        <span style={{ display: 'block', fontWeight: '600', color: textDark, fontSize: '0.95rem' }}>{prod.nombre}</span>
+                        <span style={{ display: 'block', color: textApagado, fontSize: '0.75rem' }}>{unidadCorta(prod.unidadMedida)}</span>
                       </td>
-                      {DIAS_KEYS.map(dia => {
-                        const celda = prod.dias[dia];
-                        const valorMostrar = celda ? celda.final : '-';
-                        const fueAjustado = celda && celda.estado === 'AJUSTADA';
-                        const fueAceptado = celda && celda.estado === 'ACEPTADA';
-                        const editable = esEditable(celda);
-
+                      {fechasSemana.map((fecha, i) => {
+                        const celda = prod.dias[DIAS_KEYS[i]];
+                        const esHoy = fecha === hoy;
+                        const yaPaso = fecha < hoy;
+                        const valor = celda ? ventaEsperada(celda) : null;
+                        const sinVenta = !valor;
+                        const intensidad = maximo > minimo ? (valor - minimo) / (maximo - minimo) : 0;
+                        const rango = celda?.demandaMinima != null && celda?.demandaMaxima != null
+                          ? `Entre ${formatearCantidad(celda.demandaMinima)} y ${formatearCantidad(celda.demandaMaxima)}` : undefined;
                         return (
-                          <td key={dia} style={{ padding: '15px 10px' }}>
-                            <div
-                              onClick={() => editable && abrirModalAjuste(prod, dia)}
-                              title={editable ? 'Hacé clic para ajustar este día' : celda ? 'Este día ya pasó' : 'Sin sugerencia para este día'}
-                              style={{
-                                display: 'inline-block',
-                                padding: '8px 16px',
-                                borderRadius: '8px',
-                                border: fueAjustado ? `2px solid #F4D06F` : (fueAceptado ? `1px solid #137333` : `1px solid ${borderLight}`),
-                                backgroundColor: fueAjustado ? '#FDF8EC' : (fueAceptado ? '#F4FBF6' : bgCard),
-                                color: editable ? textDark : '#A0A0A0',
-                                fontWeight: '600',
-                                fontSize: '0.9rem',
-                                position: 'relative',
-                                cursor: editable ? 'pointer' : 'default'
-                              }}
-                            >
-                              {valorMostrar}
-                              {fueAjustado && <span style={{ position: 'absolute', top: '-6px', right: '-6px', fontSize: '0.7rem' }}>✏️</span>}
+                          <td key={fecha} className={esHoy ? 'sug-hoy' : undefined} title={rango} style={{ padding: '10px 2px' }}>
+                            <div style={{
+                              margin: '0 auto', maxWidth: '46px', padding: '8px 2px', borderRadius: '10px', fontSize: '0.9rem',
+                              backgroundColor: sinVenta || yaPaso ? 'transparent' : fondoCalor(intensidad),
+                              color: yaPaso || sinVenta ? textApagado : textDark,
+                              fontWeight: !yaPaso && !sinVenta && valor === maximo && maximo > minimo ? '800' : '600'
+                            }}>
+                              {sinVenta ? '–' : formatearCantidad(valor)}
                             </div>
                           </td>
                         );
                       })}
-                      <td style={{ padding: '15px 10px' }}>
-                        <span style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', backgroundColor: badge.bg, color: badge.color }}>
-                          {prod.confianza}
+                      <td style={{ padding: '10px 8px', borderLeft: `1px solid ${borderLight}`, fontWeight: 'bold', color: textDark, fontSize: '0.95rem' }}>{formatearCantidad(Math.round(totalSemana * 10) / 10)}</td>
+                      <td style={{ padding: '10px 12px 10px 6px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 9px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold', backgroundColor: badge.bg, color: badge.color }}>
+                          <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: badge.color }} />
+                          {etiquetaConfianza(prod.nivelConfianza)}
                         </span>
-                      </td>
-                      <td style={{ padding: '15px 20px' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                          <button
-                            onClick={() => aceptarFilaProducto(prod.id, prod.nombre)}
-                            style={{
-                              padding: '6px 12px',
-                              backgroundColor: prod.aceptadaCompleta ? '#E6F4EA' : '#FDF8EC',
-                              color: prod.aceptadaCompleta ? '#137333' : '#B89732',
-                              border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem'
-                            }}
-                          >
-                            {prod.aceptadaCompleta ? '✓ Aceptado' : 'Aceptar'}
-                          </button>
-                          <button 
-                            onClick={() => abrirModalAjuste(prod)}
-                            style={{ padding: '6px 12px', backgroundColor: bgCard, color: textDark, border: `1px solid ${borderLight}`, borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.8rem' }}
-                          >
-                            Ajustar
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   );
@@ -378,114 +291,24 @@ function Sugerencias() {
               )}
             </tbody>
           </table>
-          
-          <div style={{ padding: '15px 20px', borderTop: `1px solid ${borderLight}`, backgroundColor: bgApp, fontSize: '0.85rem', color: textGray, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>✨</span> La confianza depende de los días de historial de cada producto.{' '}
-            <span onClick={() => navigate('/madurez')} style={{ color: '#B89732', fontWeight: 'bold', cursor: 'pointer' }}>Ver Madurez →</span>
-          </div>
         </div>
 
+        <div style={{ padding: '14px 20px', borderTop: `1px solid ${borderLight}`, backgroundColor: '#FAF9F6', fontSize: '0.85rem', color: textGray, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <span>Menos venta</span>
+            <span aria-hidden="true" style={{ display: 'inline-flex', gap: '3px' }}>
+              {[0, 0.33, 0.66, 1].map(n => <span key={n} style={{ width: '18px', height: '12px', borderRadius: '3px', backgroundColor: fondoCalor(n) }} />)}
+            </span>
+            <span>Más venta</span>
+            <span style={{ color: textApagado }}>Cada producto se compara con el resto de su semana.<span className="sug-solo-mouse"> Pasá el mouse por un día para ver el rango.</span></span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <span>✨ La confianza sale de cuánto se equivocó el motor.</span>
+            <button onClick={() => navigate('/madurez')} style={{ padding: 0, background: 'none', border: 'none', color: '#B89732', font: 'inherit', fontWeight: 'bold', cursor: 'pointer' }}>Ver Madurez →</button>
+          </div>
+        </div>
       </div>
-
-      {/* ================= MODAL DE AJUSTE ================= */}
-      {modal.abierto && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div style={{ backgroundColor: bgCard, width: '460px', borderRadius: '16px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.2rem', color: textDark, margin: '0 0 5px 0' }}>
-                  Ajustar {modal.producto.nombre} · {DIAS_NOMBRES[modal.diaKey]}
-                </h3>
-                <p style={{ color: textGray, margin: 0, fontSize: '0.85rem' }}>Modificá la recomendación para este día ({modal.fechaDia}).</p>
-              </div>
-              <button onClick={cerrarModal} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: textGray }}>×</button>
-            </div>
-
-            {/* Selector rápido de día dentro del modal */}
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: textGray, marginBottom: '6px' }}>Día a modificar</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {DIAS_KEYS.map(d => (
-                  <button
-                    key={d}
-                    onClick={() => cambiarDiaEnModal(d)}
-                    disabled={!esEditable(modal.producto.dias[d])}
-                    style={{
-                      flex: 1, padding: '6px 0', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 'bold',
-                      textTransform: 'uppercase', cursor: esEditable(modal.producto.dias[d]) ? 'pointer' : 'not-allowed',
-                      border: modal.diaKey === d ? `2px solid ${goldPrimary}` : `1px solid ${borderLight}`,
-                      backgroundColor: modal.diaKey === d ? '#FDF8EC' : bgCard,
-                      color: esEditable(modal.producto.dias[d]) ? textDark : '#C0C0C0'
-                    }}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Cantidad sugerida por IA</label>
-              <input type="text" value={modal.cantidadOriginal} readOnly style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${borderLight}`, backgroundColor: '#F5F5F5', color: textGray, fontSize: '0.95rem', boxSizing: 'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Nueva cantidad</label>
-              <input 
-                type="number" 
-                value={modal.nuevaCantidad}
-                onChange={(e) => setModal({...modal, nuevaCantidad: e.target.value})}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `2px solid ${goldPrimary}`, outline: 'none', backgroundColor: bgCard, color: textDark, fontSize: '0.95rem', boxSizing: 'border-box' }} 
-              />
-            </div>
-
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Motivo</label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {MOTIVOS_AJUSTE.map(m => (
-                  <button
-                    key={m.valor}
-                    onClick={() => setModal({...modal, motivo: m.valor})}
-                    style={{
-                      padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer',
-                      border: modal.motivo === m.valor ? `1px solid transparent` : `1px solid ${borderLight}`,
-                      backgroundColor: modal.motivo === m.valor ? '#F4D06F' : bgCard,
-                      color: textDark
-                    }}
-                  >
-                    {m.etiqueta}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: textDark, marginBottom: '8px' }}>Comentario</label>
-              <textarea 
-                rows="2"
-                maxLength={255}
-                value={modal.comentario}
-                onChange={(e) => setModal({...modal, comentario: e.target.value})}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${borderLight}`, outline: 'none', backgroundColor: bgCard, color: textDark, fontSize: '0.95rem', boxSizing: 'border-box', resize: 'none' }} 
-              />
-              <span style={{ fontSize: '0.75rem', color: textGray, marginTop: '5px', display: 'block' }}>El motivo se usa para mejorar las próximas predicciones.</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <button onClick={cerrarModal} style={{ padding: '10px 20px', backgroundColor: bgCard, color: textDark, border: `1px solid ${borderLight}`, borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>
-                Cancelar
-              </button>
-              <button onClick={guardarAjuste} style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>
-                Guardar ajuste
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-    </div>
+    </Pantalla>
   );
 }
 

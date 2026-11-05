@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import BarraLateral from '../components/BarraLateral';
-import { apiFetch, leerMensajeError } from '../api';
-import { formatearFechaLarga, hoyISO } from '../utils/productos';
+import Pantalla from '../components/Pantalla';
+import { BotonAlertas } from '../components/Alertas';
+import { apiFetch, leerMensajeError, MENSAJE_SIN_CONEXION } from '../api';
+import { useHoy } from '../utils/hooks';
+import { formatearFechaLarga } from '../utils/productos';
 
-const bgApp = '#FAF9F6';
 const bgCard = '#FFFFFF';
 const borderLight = '#EAE6DF';
 const textDark = '#1A1A1A';
@@ -47,12 +48,13 @@ function nombreMes(anio, mes) {
 // Calendario: feriados nacionales (ArgentinaDatos), efemérides y eventos propios del comercio.
 // Los feriados y eventos propios se usan en la predicción de Sugerencias.
 function Calendario() {
-  const hoy = hoyISO();
+  const hoy = useHoy();
   const [mesVisible, setMesVisible] = useState(() => {
     const d = new Date();
     return { anio: d.getFullYear(), mes: d.getMonth() };
   });
-  const [diaSeleccionado, setDiaSeleccionado] = useState(hoy);
+  const [diaElegido, setDiaSeleccionado] = useState(null);   // null = hoy, y avanza solo si cambia el día
+  const diaSeleccionado = diaElegido ?? hoy;
   const [eventos, setEventos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [aviso, setAviso] = useState(null); // { tipo: 'ok' | 'error', texto }
@@ -81,7 +83,7 @@ function Calendario() {
           setAviso({ tipo: 'error', texto: await leerMensajeError(res, 'No se pudo cargar el calendario.') });
         }
       } catch {
-        if (vigente) setAviso({ tipo: 'error', texto: 'No se pudo conectar con el servidor.' });
+        if (vigente) setAviso({ tipo: 'error', texto: MENSAJE_SIN_CONEXION });
       }
       if (vigente) setCargando(false);
     };
@@ -136,19 +138,23 @@ function Calendario() {
         setErrorModal(await leerMensajeError(res, 'No se pudo guardar el evento.'));
       }
     } catch {
-      setErrorModal('No se pudo conectar con el servidor.');
+      setErrorModal(MENSAJE_SIN_CONEXION);
     }
     setGuardando(false);
   };
 
   const eliminarEvento = async (evento) => {
     if (!window.confirm(`¿Borrar "${evento.titulo}" del calendario?`)) return;
-    const res = await apiFetch(`/api/eventos/${evento.id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setEventos(eventos.filter(e => e.id !== evento.id || !e.propio));
-      mostrarAviso('ok', 'Evento borrado.');
-    } else {
-      mostrarAviso('error', await leerMensajeError(res, 'No se pudo borrar el evento.'));
+    try {
+      const res = await apiFetch(`/api/eventos/${evento.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEventos(eventos.filter(e => e.id !== evento.id || !e.propio));
+        mostrarAviso('ok', 'Evento borrado.');
+      } else {
+        mostrarAviso('error', await leerMensajeError(res, 'No se pudo borrar el evento.'));
+      }
+    } catch {
+      mostrarAviso('error', MENSAJE_SIN_CONEXION);
     }
   };
 
@@ -180,22 +186,20 @@ function Calendario() {
   const botonFlecha = { width: '36px', height: '36px', borderRadius: '8px', border: `1px solid ${borderLight}`, backgroundColor: bgCard, cursor: 'pointer', fontSize: '1rem', color: textDark };
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: '"Inter", "Segoe UI", Arial, sans-serif', backgroundColor: bgApp, boxSizing: 'border-box', overflow: 'hidden', position: 'relative' }}>
-
-      <BarraLateral seccionActiva="calendario" />
-
-      {/* ================= CONTENIDO PRINCIPAL ================= */}
-      <div style={{ flex: 1, height: '100%', overflowY: 'auto', padding: '40px 50px', boxSizing: 'border-box' }}>
+    <Pantalla seccion="calendario">
 
         {/* Cabecera */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px', gap: '20px' }}>
+        <div className="fila-cabecera" style={{ marginBottom: '25px' }}>
           <div>
             <h1 style={{ fontSize: '2.2rem', color: textDark, margin: '0 0 5px 0', fontWeight: 'bold' }}>Calendario</h1>
             <p style={{ color: textGray, margin: 0, fontSize: '1rem' }}>{formatearFechaLarga(hoy)} · Los feriados y tus eventos se usan en la predicción.</p>
           </div>
-          <button onClick={() => abrirModal()} style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
-            + Agregar evento
-          </button>
+          <div className="cabecera-acciones">
+            <button onClick={() => abrirModal()} style={{ padding: '10px 20px', backgroundColor: '#F4D06F', color: textDark, border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
+              + Agregar evento
+            </button>
+            <BotonAlertas />
+          </div>
         </div>
 
         {aviso && (
@@ -204,7 +208,7 @@ function Calendario() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
+        <div className="calendario-layout">
 
           {/* ================= GRILLA DEL MES ================= */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -226,7 +230,8 @@ function Calendario() {
               </div>
             </div>
 
-            <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, overflow: 'hidden' }}>
+            <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, overflowX: 'auto' }}>
+              <div style={{ minWidth: '560px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: `1px solid ${borderLight}` }}>
                 {DIAS_SEMANA.map(dia => (
                   <div key={dia} style={{ padding: '12px', textAlign: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: '#A0A0A0', letterSpacing: '0.5px' }}>{dia}</div>
@@ -266,11 +271,12 @@ function Calendario() {
                   );
                 })}
               </div>
+              </div>
             </div>
           </div>
 
           {/* ================= PANEL DEL DÍA ================= */}
-          <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="calendario-panel">
             <div style={{ backgroundColor: bgCard, borderRadius: '16px', border: `1px solid ${borderLight}`, padding: '20px' }}>
               <span style={{ fontSize: '0.75rem', color: '#A0A0A0', fontWeight: 'bold', letterSpacing: '0.5px' }}>{diaSeleccionado === hoy ? 'HOY' : 'DÍA SELECCIONADO'}</span>
               <h3 style={{ fontSize: '1.2rem', color: textDark, margin: '4px 0 15px 0' }}>{formatearFechaLarga(diaSeleccionado)}</h3>
@@ -293,7 +299,7 @@ function Calendario() {
                         {detalle && <div style={{ fontSize: '0.8rem', color: textGray }}>{detalle}</div>}
                       </div>
                       {e.propio && (
-                        <span onClick={() => eliminarEvento(e)} title="Borrar evento" style={{ cursor: 'pointer', fontSize: '0.95rem', flexShrink: 0 }}>🗑️</span>
+                        <button onClick={() => eliminarEvento(e)} title="Borrar evento" aria-label={`Borrar evento ${e.titulo}`} style={{ padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.95rem', flexShrink: 0 }}>🗑️</button>
                       )}
                     </div>
                   );
@@ -316,7 +322,7 @@ function Calendario() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {proximos.map(e => (
-                    <div key={`${e.tipo}-${e.id}`} onClick={() => setDiaSeleccionado(e.fecha)} style={{ display: 'flex', gap: '10px', alignItems: 'center', cursor: 'pointer' }}>
+                    <div key={`${e.tipo}-${e.id ?? e.titulo}`} onClick={() => setDiaSeleccionado(e.fecha)} style={{ display: 'flex', gap: '10px', alignItems: 'center', cursor: 'pointer' }}>
                       <span style={{ width: '34px', textAlign: 'center', fontWeight: 'bold', fontSize: '1.1rem', color: ESTILO_TIPO[e.tipo]?.texto ?? textDark }}>{Number(e.fecha.slice(8))}</span>
                       <span style={{ fontSize: '0.85rem', color: textDark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.titulo}</span>
                     </div>
@@ -326,12 +332,11 @@ function Calendario() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* ================= MODAL "AGREGAR EVENTO" ================= */}
       {modal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-          <div style={{ backgroundColor: bgCard, width: '400px', borderRadius: '16px', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+        <div className="modal-fondo">
+          <div className="modal-caja" role="dialog" aria-modal="true" aria-label="Agregar evento" style={{ maxWidth: '400px' }}>
 
             <h3 style={{ fontSize: '1.4rem', color: textDark, margin: '0 0 6px 0', fontWeight: 'bold' }}>Agregar evento</h3>
             <p style={{ color: textGray, fontSize: '0.85rem', margin: '0 0 20px 0' }}>Algo que pueda cambiar tus ventas ese día. Solo lo ve tu comercio.</p>
@@ -376,7 +381,7 @@ function Calendario() {
         </div>
       )}
 
-    </div>
+    </Pantalla>
   );
 }
 

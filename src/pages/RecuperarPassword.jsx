@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Marca';
-import { apiFetch, leerMensajeError } from '../api';
+import { apiFetch, leerMensajeError, MENSAJE_SIN_CONEXION } from '../api';
 
 // Pide el link para restablecer la contraseña. El backend responde lo mismo exista o no la cuenta.
 function RecuperarPassword() {
@@ -20,7 +20,7 @@ function RecuperarPassword() {
       if (res.ok) setEnviado((await res.json()).message);
       else setError(await leerMensajeError(res, 'No se pudo enviar el mail.'));
     } catch {
-      setError('No se pudo conectar con el servidor.');
+      setError(MENSAJE_SIN_CONEXION);
     }
     setEnviando(false);
   };
@@ -38,17 +38,10 @@ function RecuperarPassword() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+    <div className="auth-raiz">
       
       {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#F7F4EB', 
-        padding: '60px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center' 
-      }}>
+      <div className="auth-marca">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
           <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
@@ -65,14 +58,7 @@ function RecuperarPassword() {
       </div>
 
       {/* Lado Derecho - Formulario de Recuperación */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#FFFFFF', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        alignItems: 'center' 
-      }}>
+      <div className="auth-form">
         <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0' }}>
           <h2 style={{ fontSize: '2rem', marginBottom: '10px', color: '#1a1a1a', marginTop: '0' }}>Recuperar contraseña</h2>
           <p style={{ color: '#666666', marginBottom: '30px' }}>Te enviaremos las instrucciones a tu correo.</p>

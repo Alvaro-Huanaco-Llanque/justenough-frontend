@@ -2,11 +2,11 @@
 // Los valores (UNIDAD, KG...) son los mismos que los enums del backend.
 
 export const UNIDADES = [
-  { valor: 'UNIDAD', etiqueta: 'Unidad', corta: 'unidades' },   // siempre "unidades", sin abreviar, para que no haya confusión
-  { valor: 'KG', etiqueta: 'Kilogramo', corta: 'kg' },
-  { valor: 'GRAMO', etiqueta: 'Gramo', corta: 'g' },
-  { valor: 'LITRO', etiqueta: 'Litro', corta: 'l' },
-  { valor: 'ML', etiqueta: 'Mililitro', corta: 'ml' },
+  { valor: 'UNIDAD', etiqueta: 'Unidad', corta: 'unidades', singular: 'unidad' },
+  { valor: 'KG', etiqueta: 'Kilogramo', corta: 'kg', singular: 'kg' },
+  { valor: 'GRAMO', etiqueta: 'Gramo', corta: 'g', singular: 'g' },
+  { valor: 'LITRO', etiqueta: 'Litro', corta: 'l', singular: 'l' },
+  { valor: 'ML', etiqueta: 'Mililitro', corta: 'ml', singular: 'ml' },
 ];
 
 export const MODALIDADES = [
@@ -22,14 +22,23 @@ export const MOTIVOS_DESECHO = [
   { valor: 'OTRO', etiqueta: 'Otro' },
 ];
 
-// Motivos para ajustar una sugerencia (enum MotivoAjuste)
-export const MOTIVOS_AJUSTE = [
-  { valor: 'FERIADO', etiqueta: 'Feriado' },
-  { valor: 'EVENTO', etiqueta: 'Evento' },
-  { valor: 'PROMOCION', etiqueta: 'Promoción' },
-  { valor: 'CLIMA', etiqueta: 'Clima' },
+// Motivos de un ajuste manual de stock (enum MotivoAjusteStock)
+export const MOTIVOS_AJUSTE_STOCK = [
+  { valor: 'CONTEO', etiqueta: 'Conteo: no coincidía' },
+  { valor: 'MERMA', etiqueta: 'Merma' },
+  { valor: 'ROBO', etiqueta: 'Robo o faltante' },
   { valor: 'OTRO', etiqueta: 'Otro' },
 ];
+
+// Tipos de movimiento de stock (enum TipoMovimiento)
+export const TIPOS_MOVIMIENTO = {
+  STOCK_INICIAL: 'Stock inicial',
+  INGRESO: 'Producido / comprado',
+  VENTA: 'Venta',
+  DESECHO: 'Desecho',
+  CORRECCION: 'Corrección',
+  AJUSTE_INVENTARIO: 'Ajuste de inventario',
+};
 
 export const RUBROS = [
   { valor: 'PANADERIA', etiqueta: 'Panadería' },
@@ -37,16 +46,28 @@ export const RUBROS = [
   { valor: 'RESTAURANTE', etiqueta: 'Restaurante' },
 ];
 
-export function unidadCorta(valor) {
-  return UNIDADES.find(u => u.valor === valor)?.corta ?? valor?.toLowerCase() ?? '';
+export const PROVINCIAS = [
+  'Ciudad Autónoma de Buenos Aires', 'Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
+  'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
+  'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
+];
+
+// Cuánto se puede cargar hacia atrás y programar hacia adelante (igual que en el backend)
+export const DIAS_MAX_ATRAS = 90;
+export const DIAS_MAX_ADELANTE = 90;
+
+export function unidadCorta(valor, cantidad) {
+  const unidad = UNIDADES.find(u => u.valor === valor);
+  if (!unidad) return valor?.toLowerCase() ?? '';
+  return Number(cantidad) === 1 ? unidad.singular : unidad.corta;
 }
 
 export function etiquetaModalidad(valor) {
   return MODALIDADES.find(m => m.valor === valor)?.etiqueta ?? valor ?? '';
 }
 
-export function etiquetaMotivoAjuste(valor) {
-  return MOTIVOS_AJUSTE.find(m => m.valor === valor)?.etiqueta ?? valor ?? '';
+export function etiquetaMotivoDesecho(valor) {
+  return MOTIVOS_DESECHO.find(m => m.valor === valor)?.etiqueta ?? valor ?? '';
 }
 
 // "ALTA" -> "Alta"
@@ -81,6 +102,22 @@ export function formatearCantidad(numero) {
   return (Number(numero) || 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
 }
 
+// (1, 'UNIDAD') -> "1 unidad" ; (2.5, 'KG') -> "2,5 kg"
+export function cantidadConUnidad(numero, unidadMedida) {
+  return `${formatearCantidad(numero)} ${unidadCorta(unidadMedida, numero)}`;
+}
+
+// No se suman kilos con unidades: [{cantidad:3, unidadMedida:'KG'}, {cantidad:2, unidadMedida:'UNIDAD'}] -> "3 kg · 2 unidades"
+export function resumirPorUnidad(items) {
+  const totales = {};
+  items.forEach(({ cantidad, unidadMedida }) => {
+    const n = Number(cantidad) || 0;
+    if (n !== 0) totales[unidadMedida] = (totales[unidadMedida] || 0) + n;
+  });
+  const partes = UNIDADES.filter(u => totales[u.valor] !== undefined).map(u => cantidadConUnidad(totales[u.valor], u.valor));
+  return partes.length ? partes.join(' · ') : 'Nada';
+}
+
 // 87.5 -> "87,5%"
 export function formatearPorcentaje(numero) {
   return (Number(numero) || 0).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + '%';
@@ -111,20 +148,31 @@ export function formatearMomento(fechaHoraISO) {
   if (!fechaHoraISO) return '';
   const [fecha, hora = ''] = fechaHoraISO.split('T');
   const hhmm = hora.slice(0, 5);
-  const ayer = new Date();
-  ayer.setDate(ayer.getDate() - 1);
-  if (fecha === hoyISO()) return `Hoy, ${hhmm}`;
-  if (fecha === ayer.toLocaleDateString('en-CA')) return `Ayer, ${hhmm}`;
+  const hoy = hoyISO();
+  if (fecha === hoy) return `Hoy, ${hhmm}`;
+  if (fecha === sumarDias(hoy, -1)) return `Ayer, ${hhmm}`;
   return `${fechaCorta(fecha)}, ${hhmm}`;
 }
 
-// Fecha de hoy en formato AAAA-MM-DD según la hora local (no UTC)
+// Fecha de hoy en Argentina (AAAA-MM-DD), igual que el servidor, aunque el navegador esté en otra zona horaria
 export function hoyISO() {
-  return new Date().toLocaleDateString('en-CA');
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
 // Suma días a una fecha AAAA-MM-DD sin pasar por UTC
 export function sumarDias(fechaISO, dias) {
   const [a, m, d] = fechaISO.split('-').map(Number);
   return new Date(a, m - 1, d + dias).toLocaleDateString('en-CA');
+}
+
+// Lunes de la semana de una fecha AAAA-MM-DD
+export function lunesDe(fechaISO) {
+  const [a, m, d] = fechaISO.split('-').map(Number);
+  const diaSemana = new Date(a, m - 1, d).getDay(); // 0 = domingo
+  return sumarDias(fechaISO, diaSemana === 0 ? -6 : 1 - diaSemana);
+}
+
+// Para comparar nombres sin que importen mayúsculas ni tildes: "Budín" y "budin" son lo mismo
+export function normalizarNombre(nombre = '') {
+  return nombre.trim().normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ');
 }

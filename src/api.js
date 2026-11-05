@@ -4,10 +4,22 @@ export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const TOKEN_KEY = 'jwt_token';
 const USUARIO_KEY = 'usuario';
 
+// Se dispara cuando cambió algo en el servidor: la campana se actualiza sola
+export const EVENTO_DATOS_CAMBIARON = 'je:datos-cambiaron';
+
+export function avisarDatosCambiaron() {
+  window.dispatchEvent(new Event(EVENTO_DATOS_CAMBIARON));
+}
+
 // ================= SESIÓN =================
 export function guardarSesion({ token, usuario }) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USUARIO_KEY, JSON.stringify(usuario));
+}
+
+// Al cambiar la contraseña las sesiones anteriores dejan de valer: esta sigue con el token nuevo
+export function actualizarToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function obtenerToken() {
@@ -45,7 +57,9 @@ export function iniciales(nombre = '') {
 // ================= PEDIDOS AL BACKEND =================
 // Igual que fetch, pero agrega la URL base y el token. Si el backend responde 401
 // (token vencido o inválido) cierra la sesión y vuelve al login.
-export async function apiFetch(ruta, opciones = {}) {
+// "sinRefrescar": para cambiar la contraseña o dar de baja la cuenta, donde el token actual deja de valer
+// y refrescar la pantalla con él cerraría la sesión.
+export async function apiFetch(ruta, { sinRefrescar = false, ...opciones } = {}) {
   const headers = { ...(opciones.headers || {}) };
   const token = obtenerToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -57,6 +71,8 @@ export async function apiFetch(ruta, opciones = {}) {
     cerrarSesion();
     window.location.href = '/';
   }
+  // Toda escritura que salió bien puede cambiar alertas o pendientes
+  if (res.ok && !sinRefrescar && opciones.method && opciones.method !== 'GET') avisarDatosCambiaron();
   return res;
 }
 
@@ -69,3 +85,5 @@ export async function leerMensajeError(res, porDefecto = 'Ocurrió un error ines
     return porDefecto;
   }
 }
+
+export const MENSAJE_SIN_CONEXION = 'No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.';

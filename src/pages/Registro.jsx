@@ -1,13 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Marca';
-import { apiFetch, leerMensajeError } from '../api';
-
-const PROVINCIAS = [
-  'Ciudad Autónoma de Buenos Aires', 'Buenos Aires', 'Catamarca', 'Chaco', 'Chubut', 'Córdoba', 'Corrientes',
-  'Entre Ríos', 'Formosa', 'Jujuy', 'La Pampa', 'La Rioja', 'Mendoza', 'Misiones', 'Neuquén', 'Río Negro',
-  'Salta', 'San Juan', 'San Luis', 'Santa Cruz', 'Santa Fe', 'Santiago del Estero', 'Tierra del Fuego', 'Tucumán'
-];
+import { apiFetch, leerMensajeError, MENSAJE_SIN_CONEXION } from '../api';
+import { PROVINCIAS } from '../utils/productos';
 
 function Registro() {
   const [paso, setPaso] = useState(1);
@@ -34,7 +29,7 @@ function Registro() {
 
   const handleSiguiente = (e) => {
     e.preventDefault();
-    if (!nombreComercio || !direccion || !localidad || !provincia || !telefono) {
+    if (!nombreComercio.trim() || !direccion.trim() || !localidad.trim() || !provincia || !telefono.trim()) {
       setError('Por favor completa todos los campos del comercio.');
       return;
     }
@@ -81,7 +76,7 @@ function Registro() {
         setError(await leerMensajeError(res, 'No se pudo crear la cuenta.'));
       }
     } catch {
-      setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+      setError(MENSAJE_SIN_CONEXION);
     }
     setCargando(false);
   };
@@ -95,7 +90,7 @@ function Registro() {
       });
       setAvisoReenvio(res.ok ? 'Listo, te enviamos un nuevo mail.' : await leerMensajeError(res, 'No se pudo reenviar el mail.'));
     } catch {
-      setAvisoReenvio('No se pudo conectar con el servidor.');
+      setAvisoReenvio(MENSAJE_SIN_CONEXION);
     }
   };
 
@@ -112,17 +107,10 @@ function Registro() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+    <div className="auth-raiz">
       
       {/* Lado Izquierdo - Branding (Paleta exacta Figma) */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#F7F4EB', 
-        padding: '60px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center' 
-      }}>
+      <div className="auth-marca">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px' }}>
           <Logo tamano={40} />
           <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#1a1a1a' }}>Just Enough</span>
@@ -139,15 +127,7 @@ function Registro() {
       </div>
 
       {/* Lado Derecho - Formulario / Pantalla de Verificación */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: '#FFFFFF', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        alignItems: 'center',
-        overflowY: 'auto'
-      }}>
+      <div className="auth-form">
         <div style={{ width: '100%', maxWidth: '400px', padding: '20px 0' }}>
           
           {verificandoEmail ? (
@@ -383,7 +363,7 @@ function Registro() {
                       style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                     />
                     <label htmlFor="terminos" style={{ fontSize: '0.9rem', color: '#444444', cursor: 'pointer' }}>
-                      Acepto los términos y condiciones
+                      Acepto los <a href="/terminos" target="_blank" rel="noreferrer" style={{ color: '#B89732', fontWeight: 'bold' }}>términos y condiciones</a>
                     </label>
                   </div>
 
